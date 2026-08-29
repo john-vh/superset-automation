@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+
+/*
+ * Palette: near-black canvas with raised grey surfaces. Saturated colours are reserved
+ * for signal (active work, success, warning, failure).
+ */
+@theme {
+  --color-canvas: #0a0a0b;
+  --color-surface: #141417;
+  --color-surface-raised: #1c1c21;
+  --color-line: #26262c;
+  --color-line-strong: #34343c;
+
+  --color-text: #e7e7ea;
+  --color-muted: #8b8b95;
+  --color-faint: #5f5f69;
+
+  --color-active: #8b5cf6;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #38bdf8;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-canvas);
+    color: var(--color-text);
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-line-strong);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+}
