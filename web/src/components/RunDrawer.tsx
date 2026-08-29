@@ -1,0 +1,129 @@
+import { PHASE_LABELS } from '@shared/board';
+import type { CardDto, RunDetailDto, RunEventDto } from '@shared/types';
+import { ExternalLink, GitPullRequest, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckList } from '@/components/board/CheckList';
+import { PhaseProgress } from '@/components/board/PhaseProgress';
+import { Badge } from '@/components/ui/badge';
+import { Drawer } from '@/components/ui/drawer';
+import { api } from '@/lib/api';
+import { PHASE_TONES } from '@/lib/phase';
+import { formatRelative } from '@/lib/utils';
+
+const EVENT_TONES = {
+  phase: 'active',
+  message: 'neutral',
+  system: 'info',
+  error: 'danger',
+} as const;
+
+export interface RunDrawerProps {
+  card: CardDto | null;
+  onClose: () => void;
+}
+
+export function RunDrawer({ card, onClose }: RunDrawerProps) {
+  const [detail, setDetail] = useState<RunDetailDto | null>(null);
+  const runId = card?.run?.id ?? null;
+
+  useEffect(() => {
+    if (!runId) {
+      setDetail(null);
+      return;
+    }
+    let active = true;
+    void api.runDetail(runId).then((next) => {
+      if (active) setDetail(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, [runId, card?.run?.updatedAt]);
+
+  if (!card) return null;
+  const { issue, run, pullRequest } = card;
+  const events: RunEventDto[] = detail?.events ?? [];
+
+  return (
+    <Drawer open onOpenChange={(open) => !open && onClose()} title={issue.title} description={`#${issue.number} · ${issue.repo}`}>
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={PHASE_TONES[card.phase]}>{PHASE_LABELS[card.phase]}</Badge>
+          {run ? <Badge tone={run.status === 'failed' ? 'danger' : 'neutral'}>{run.status}</Badge> : null}
+          <a href={issue.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted hover:text-text">
+            Issue <ExternalLink size={11} />
+          </a>
+          {run?.sessionUrl ? (
+            <a href={run.sessionUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-active hover:underline">
+              <Sparkles size={12} />Devin session
+            </a>
+          ) : null}
+        </div>
+
+        {run ? (
+          <section className="space-y-2 rounded-lg border border-line bg-surface-raised p-3">
+            <PhaseProgress phase={card.phase} needsAttention={card.needsAttention} />
+            <dl className="grid grid-cols-3 gap-2 text-[11px]">
+              <div>
+                <dt className="text-faint">ACUs</dt>
+                <dd className="text-text">{run.acus.toFixed(2)}</dd>
+              </div>
+              <div>
+                <dt className="text-faint">Started</dt>
+                <dd className="text-text">{formatRelative(run.createdAt)}</dd>
+              </div>
+              <div>
+                <dt className="text-faint">Updated</dt>
+                <dd className="text-text">{formatRelative(run.updatedAt)}</dd>
+              </div>
+            </dl>
+            {run.statusDetail ? <p className="text-xs text-muted">{run.statusDetail}</p> : null}
+            {run.error ? <p className="text-xs text-danger">{run.error}</p> : null}
+          </section>
+        ) : (
+          <p className="text-xs text-muted">No Devin session has been started for this issue yet.</p>
+        )}
+
+        {pullRequest ? (
+          <section className="space-y-2 rounded-lg border border-line bg-surface-raised p-3">
+            <a href={pullRequest.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-info hover:underline">
+              <GitPullRequest size={14} />#{pullRequest.number} {pullRequest.title}
+            </a>
+            <div className="flex items-center gap-2">
+              <Badge tone={pullRequest.merged ? 'success' : pullRequest.state === 'open' ? 'info' : 'neutral'}>
+                {pullRequest.merged ? 'merged' : pullRequest.state}
+              </Badge>
+              <CheckList checks={pullRequest.checks} />
+            </div>
+          </section>
+        ) : null}
+
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Timeline</h3>
+          {events.length === 0 ? (
+            <p className="text-xs text-faint">No activity recorded yet.</p>
+          ) : (
+            <ol className="space-y-2">
+              {events.map((event) => (
+                <li key={event.id} className="rounded-md border border-line bg-surface-raised p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge tone={EVENT_TONES[event.kind]}>{event.phase ? PHASE_LABELS[event.phase] : event.kind}</Badge>
+                    <span className="text-[10px] text-faint">{formatRelative(event.createdAt)}</span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-xs text-muted">{event.message}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Issue</h3>
+          <p className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border border-line bg-surface-raised p-3 text-xs text-muted">
+            {issue.body || 'No description.'}
+          </p>
+        </section>
+      </div>
+    </Drawer>
+  );
+}
