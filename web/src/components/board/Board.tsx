@@ -1,6 +1,6 @@
 import { BOARD_COLUMNS } from '@shared/board';
 import type { CardDto } from '@shared/types';
-import { AlertTriangle } from 'lucide-react';
+import { AttentionList } from './AttentionList';
 import { IssueCard } from './IssueCard';
 
 export interface BoardProps {
@@ -18,42 +18,29 @@ export function Board({ cards, dispatching, busy, canDispatch, onDispatch, onSto
   const attention = cards.filter((card) => card.phase === 'attention');
 
   return (
-    <div className="flex flex-col gap-4">
-      {attention.length > 0 ? (
-        <section className="rounded-lg border border-warning/40 bg-warning/5 p-3">
-          <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-warning">
-            <AlertTriangle size={13} />Needs attention · {attention.length}
-          </h2>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {attention.map((card) => (
-              <IssueCard
-                key={card.issue.number}
-                card={card}
-                dispatching={dispatching === card.issue.number}
-                busy={busy === card.issue.number}
-                canDispatch={canDispatch}
-                onDispatch={onDispatch}
-                onStop={onStop}
-                onReset={onReset}
-                onOpen={onOpen}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <AttentionList cards={attention} busy={busy} onReset={onReset} onOpen={onOpen} />
 
-      <div className="flex gap-3 overflow-x-auto pb-4">
+      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
         {BOARD_COLUMNS.map((column) => {
-          const columnCards = cards.filter((card) => card.phase === column.key);
+          const columnCards = cards.filter((card) => column.accepts.includes(card.phase));
           return (
-            <section key={column.key} className="flex w-72 shrink-0 flex-col rounded-lg border border-line bg-surface">
-              <header className="flex items-center justify-between border-b border-line px-3 py-2" title={column.description}>
+            <section
+              key={column.key}
+              className="flex h-full w-72 shrink-0 flex-col rounded-lg border border-line bg-surface"
+            >
+              <header
+                className="flex items-center justify-between border-b border-line px-3 py-2"
+                title={column.description}
+              >
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{column.title}</h2>
                 <span className="rounded bg-surface-raised px-1.5 text-[11px] text-faint">{columnCards.length}</span>
               </header>
-              <div className="flex flex-1 flex-col gap-2 p-2">
+              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
                 {columnCards.length === 0 ? (
-                  <p className="px-1 py-6 text-center text-[11px] text-faint">Nothing here</p>
+                  <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-line text-[11px] text-faint">
+                    Nothing here
+                  </div>
                 ) : (
                   columnCards.map((card) => (
                     <IssueCard
@@ -66,6 +53,7 @@ export function Board({ cards, dispatching, busy, canDispatch, onDispatch, onSto
                       onStop={onStop}
                       onReset={onReset}
                       onOpen={onOpen}
+                      inPhaseColumn
                     />
                   ))
                 )}

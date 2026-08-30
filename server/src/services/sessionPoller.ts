@@ -51,7 +51,7 @@ function notifyStatusChange(run: RunDto, status: RunDto['status'], detail: Devin
     runId: run.id,
     kind: status === 'failed' || status === 'stopped' ? 'error' : 'system',
     source: 'devin',
-    message: `Session status: ${reported || status}`,
+    message: status === 'finished' && prNumber ? `Session ended — PR #${prNumber} is with you` : `Session status: ${reported || status}`,
   });
 
   if (status === 'failed') {
@@ -100,12 +100,19 @@ export async function pollRun(run: RunDto): Promise<void> {
   }
 
   const prNumber = pullRequestNumberFromUrl(pullRequestUrl(detail.pull_requests.at(0)));
-  if (prNumber) await trackPullRequest({ number: prNumber, issueNumber: run.issueNumber, runId: run.id });
+  const pr = prNumber
+    ? await trackPullRequest({ number: prNumber, issueNumber: run.issueNumber, runId: run.id })
+    : null;
 
-  const status = mapSessionStatus(detail.status, detail.status_detail);
+  // A session that ends while its PR is open handed the work over; that is the expected ending,
+  // not a failure, so it must not be reported as an error or drop the card into attention.
+  const handedOff = Boolean(pr && pr.state === 'open' && !pr.merged);
+  const reported = mapSessionStatus(detail.status, detail.status_detail);
+  const status = handedOff && reported === 'stopped' ? 'finished' : reported;
+
   let phase = furthest(run.phase, messagePhase);
   if (prNumber) phase = furthest(phase, 'review');
-  if (status === 'failed' || status === 'blocked' || status === 'stopped') phase = 'attention';
+  if (!handedOff && (status === 'failed' || status === 'blocked' || status === 'stopped')) phase = 'attention';
 
   const terminal = isTerminal(status);
   updateRun(run.id, {

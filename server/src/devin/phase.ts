@@ -39,6 +39,8 @@ export function mapSessionStatus(status: string | null, detail: string | null = 
   const mapped = STATUS_MAP[status.toLowerCase()] ?? 'running';
 
   if (normalizedDetail && FAILURE_DETAILS.has(normalizedDetail)) return 'failed';
+  // Going idle is how a session normally ends once its work is handed over, not a stop.
+  if (normalizedDetail === 'inactivity') return 'finished';
   if (mapped === 'running' && normalizedDetail === 'finished') return 'finished';
   if (mapped === 'running' && normalizedDetail?.startsWith('waiting_for_')) return 'blocked';
   return mapped;

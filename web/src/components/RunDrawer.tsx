@@ -1,4 +1,4 @@
-import { PHASE_LABELS, RUN_STATUS_LABELS, isRunActive } from '@shared/board';
+import { PHASE_LABELS, RUN_STATUS_LABELS, isRunWorking } from '@shared/board';
 import type { CardDto, RunDetailDto, RunEventDto } from '@shared/types';
 import { ExternalLink, GitPullRequest, RotateCcw, Sparkles, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -8,13 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Drawer } from '@/components/ui/drawer';
 import { api } from '@/lib/api';
-import { PHASE_TONES, RUN_STATUS_TONES } from '@/lib/phase';
+import { PHASE_TONES, RUN_STATUS_TONES, statusPill } from '@/lib/phase';
+import { isSessionMessage, isTimelineEvent } from '@/lib/timeline';
 import { formatRelative } from '@/lib/utils';
 
 const EVENT_TONES = {
   phase: 'active',
   message: 'neutral',
-  system: 'info',
+  system: 'neutral',
   error: 'danger',
 } as const;
 
@@ -28,6 +29,7 @@ export interface RunDrawerProps {
 
 export function RunDrawer({ card, busy, onStop, onReset, onClose }: RunDrawerProps) {
   const [detail, setDetail] = useState<RunDetailDto | null>(null);
+  const [showMessages, setShowMessages] = useState(false);
   const runId = card?.run?.id ?? null;
 
   useEffect(() => {
@@ -46,16 +48,21 @@ export function RunDrawer({ card, busy, onStop, onReset, onClose }: RunDrawerPro
 
   if (!card) return null;
   const { issue, run, pullRequest } = card;
-  const events: RunEventDto[] = detail?.events ?? [];
-  const active = run ? isRunActive(run.status) : false;
+  const allEvents: RunEventDto[] = detail?.events ?? [];
+  const events = showMessages ? allEvents : allEvents.filter(isTimelineEvent);
+  const messageCount = allEvents.filter(isSessionMessage).length;
+  const working = run ? isRunWorking(run.status) : false;
   const awaitingReview = pullRequest?.state === 'open' && !pullRequest.merged;
+  const pill = statusPill(card);
 
   return (
     <Drawer open onOpenChange={(open) => !open && onClose()} title={issue.title} description={`#${issue.number} · ${issue.repo}`}>
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={PHASE_TONES[card.phase]}>{PHASE_LABELS[card.phase]}</Badge>
-          {run ? <Badge tone={RUN_STATUS_TONES[run.status]}>{RUN_STATUS_LABELS[run.status]}</Badge> : null}
+          {run && !awaitingReview ? (
+            <Badge tone={RUN_STATUS_TONES[run.status]}>{RUN_STATUS_LABELS[run.status]}</Badge>
+          ) : null}
           <a href={issue.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted hover:text-text">
             Issue <ExternalLink size={11} />
           </a>
@@ -68,7 +75,7 @@ export function RunDrawer({ card, busy, onStop, onReset, onClose }: RunDrawerPro
 
         {run ? (
           <section className="space-y-2 rounded-lg border border-line bg-surface-raised p-3">
-            <PhaseProgress phase={card.phase} needsAttention={card.needsAttention} />
+            <PhaseProgress phase={card.phase} tone={pill?.tone ?? PHASE_TONES[card.phase]} working={working} />
             <dl className="grid grid-cols-3 gap-2 text-[11px]">
               <div>
                 <dt className="text-faint">ACUs</dt>
@@ -85,13 +92,16 @@ export function RunDrawer({ card, busy, onStop, onReset, onClose }: RunDrawerPro
             </dl>
             {run.statusDetail ? <p className="text-xs text-muted">{run.statusDetail}</p> : null}
             {run.error ? <p className="text-xs text-danger">{run.error}</p> : null}
-            {!active && run.status !== 'finished' ? (
+            {!working && awaitingReview ? (
+              <p className="text-xs text-attention">Session ended — the pull request is with you.</p>
+            ) : null}
+            {!working && !awaitingReview && (run.status === 'failed' || run.status === 'stopped') ? (
               <p className="text-xs text-danger">
                 This session is over and is no longer making progress. Reset the issue to run it again.
               </p>
             ) : null}
             <div className="flex flex-wrap gap-2 pt-1">
-              {active ? (
+              {working ? (
                 <Button
                   size="sm"
                   disabled={busy}
@@ -120,18 +130,23 @@ export function RunDrawer({ card, busy, onStop, onReset, onClose }: RunDrawerPro
         {pullRequest ? (
           <section
             className={`space-y-2 rounded-lg border bg-surface-raised p-3 ${
-              awaitingReview ? 'border-info/60 ring-1 ring-info/25' : 'border-line'
+              awaitingReview ? 'border-attention/60 ring-1 ring-attention/25' : 'border-line'
             }`}
           >
             {awaitingReview ? (
-              <p className="text-xs font-medium text-info">Your review is needed</p>
+              <p className="text-xs font-medium text-attention">Awaiting review — merge it to finish this issue</p>
             ) : null}
-            <a href={pullRequest.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-info hover:underline">
+            <a
+              href={pullRequest.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-text hover:underline"
+            >
               <GitPullRequest size={14} />#{pullRequest.number} {pullRequest.title}
             </a>
             <div className="flex items-center gap-2">
-              <Badge tone={pullRequest.merged ? 'success' : pullRequest.state === 'open' ? 'info' : 'neutral'}>
-                {pullRequest.merged ? 'merged' : pullRequest.state}
+              <Badge tone={pullRequest.merged ? 'success' : awaitingReview ? 'attention' : 'neutral'}>
+                {pullRequest.merged ? 'merged' : awaitingReview ? 'awaiting review' : pullRequest.state}
               </Badge>
               <CheckList checks={pullRequest.checks} />
             </div>
@@ -144,7 +159,14 @@ export function RunDrawer({ card, busy, onStop, onReset, onClose }: RunDrawerPro
         ) : null}
 
         <section>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Timeline</h3>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Timeline</h3>
+            {messageCount > 0 ? (
+              <Button variant="ghost" size="sm" onClick={() => setShowMessages((value) => !value)}>
+                {showMessages ? 'Hide session messages' : `Show session messages (${messageCount})`}
+              </Button>
+            ) : null}
+          </div>
           {events.length === 0 ? (
             <p className="text-xs text-faint">No activity recorded yet.</p>
           ) : (

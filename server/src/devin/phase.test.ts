@@ -17,6 +17,11 @@ describe('mapSessionStatus', () => {
     expect(mapSessionStatus('running', 'finished')).toBe('finished');
     expect(mapSessionStatus('running', 'out_of_credits')).toBe('failed');
   });
+
+  it('treats going idle as a normal end rather than a stop', () => {
+    expect(mapSessionStatus('suspended', 'inactivity')).toBe('finished');
+    expect(mapSessionStatus('exit', 'inactivity')).toBe('finished');
+  });
 });
 
 describe('inferPhase', () => {

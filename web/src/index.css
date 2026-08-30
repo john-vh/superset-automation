@@ -1,8 +1,16 @@
 @import 'tailwindcss';
 
 /*
- * Palette: near-black canvas with raised grey surfaces. Saturated colours are reserved
- * for signal (active work, success, warning, failure).
+ * Near-black canvas with raised grey surfaces. Every saturated colour answers one question —
+ * who owns this card right now, and is it healthy?
+ *
+ *   grey      no actor: backlog, queued, counts, metadata
+ *   active    Devin owns it and is working (violet, the only colour that ever animates)
+ *   attention you own the next action: review, blocked, config warnings (amber)
+ *   success   finished well: merged, passing checks (green)
+ *   danger    finished badly: failed or stopped session, failing checks (red)
+ *
+ * The four signal hues sit at a matched lightness/chroma so no single one shouts over the others.
  */
 @theme {
   --color-canvas: #0a0a0b;
@@ -15,11 +23,10 @@
   --color-muted: #8b8b95;
   --color-faint: #5f5f69;
 
-  --color-active: #8b5cf6;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-info: #38bdf8;
+  --color-active: #8b73f0;
+  --color-attention: #e8a33d;
+  --color-success: #46b26a;
+  --color-danger: #e5646b;
 }
 
 @layer base {
