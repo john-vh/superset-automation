@@ -39,6 +39,7 @@ All settings live in `.env` (never commit it). See `.env.example` for the full l
 | `DEVIN_MAX_ACU` | Per-session ACU ceiling. |
 | `APP_BASE_URL` | Public URL sessions post phase callbacks to (a tunnel when running locally). |
 | `CALLBACK_TOKEN` | Shared secret sessions send as `X-Callback-Token`. |
+| `ACU_RATE_USD` | Price of one ACU (default `2.25`), used for the estimated spend metric. |
 
 ## Ingestion
 

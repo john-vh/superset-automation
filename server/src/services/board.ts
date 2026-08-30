@@ -7,6 +7,7 @@ import type {
   PullRequestDto,
   RunDto,
 } from '../../../shared/types.js';
+import { TERMINAL_RUN_STATUSES } from '../../../shared/board.js';
 import { config, devinConfigured, githubConfigured, githubRepo } from '../config.js';
 import { listIssues } from '../store/issues.js';
 import { getMeta } from '../store/meta.js';
@@ -20,13 +21,18 @@ export function hasFailingCheck(pr: PullRequestDto | null): boolean {
   return Boolean(pr?.checks.some((check) => check.state === 'failure'));
 }
 
+/**
+ * A card is only `done` once the pull request is merged (or the issue itself was closed) — a
+ * session reporting `done` while its PR is still open stays in `review`, where the user acts.
+ */
 export function resolvePhase(issue: IssueDto, run: RunDto | null, pr: PullRequestDto | null): Phase {
   if (pr?.merged) return 'done';
   if (!run) return issue.state === 'closed' ? 'done' : 'backlog';
-  if (run.status === 'failed' || run.status === 'blocked') return 'attention';
   if (hasFailingCheck(pr)) return 'attention';
   if (pr && pr.state === 'open') return 'review';
-  if (run.status === 'finished' && run.phase !== 'done') return pr ? 'review' : 'attention';
+  if (run.status === 'failed' || run.status === 'blocked' || run.status === 'stopped') return 'attention';
+  if (run.status === 'finished') return pr ? 'review' : 'attention';
+  if (run.phase === 'done') return 'review';
   return run.phase;
 }
 
@@ -59,8 +65,10 @@ export function buildMetrics(cards: CardDto[]): MetricsDto {
     .map((card) => Date.parse(card.pullRequest.createdAt) - Date.parse(card.run.createdAt))
     .filter((delta) => Number.isFinite(delta) && delta >= 0);
 
-  const completedRuns = runs.filter((run) => run.status === 'finished' || run.status === 'failed');
+  const completedRuns = runs.filter((run) => TERMINAL_RUN_STATUSES.includes(run.status));
   const successfulRuns = completedRuns.filter((run) => run.status === 'finished');
+  const acusConsumed = Number(runs.reduce((total, run) => total + run.acus, 0).toFixed(2));
+  const rate = config.ACU_RATE_USD;
 
   return {
     issuesTotal: cards.length,
@@ -71,7 +79,9 @@ export function buildMetrics(cards: CardDto[]): MetricsDto {
     prsMerged: prs.filter((pr) => pr.merged).length,
     checksPassing: checks.filter((check) => check.state === 'success').length,
     checksFailing: checks.filter((check) => check.state === 'failure').length,
-    acusConsumed: Number(runs.reduce((total, run) => total + run.acus, 0).toFixed(2)),
+    acusConsumed,
+    estimatedCostUsd: rate ? Number((acusConsumed * rate).toFixed(2)) : null,
+    acuRateUsd: rate ?? null,
     medianTimeToPrMs: median(timesToPr),
     successRate: completedRuns.length === 0 ? null : successfulRuns.length / completedRuns.length,
   };

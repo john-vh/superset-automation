@@ -5,31 +5,31 @@ export interface DevinSessionCreated {
   url: string | null;
 }
 
+/** `pull_requests[]` is `{ url, state }` on v3 and `{ pr_url, pr_state }` on some responses. */
 export interface DevinPullRequestRef {
   url?: string | null;
-  number?: number | null;
-  title?: string | null;
+  pr_url?: string | null;
   state?: string | null;
-  merged?: boolean | null;
+  pr_state?: string | null;
 }
 
 export interface DevinSessionDetail {
   session_id: string;
+  /** One of new, claimed, running, exit, error, suspended, resuming. */
   status: string | null;
-  status_enum: string | null;
+  /** Qualifies `status`, e.g. working, waiting_for_user, finished, user_request, inactivity. */
+  status_detail: string | null;
   title: string | null;
   url: string | null;
   acus_consumed: number | null;
   pull_requests: DevinPullRequestRef[];
   structured_output: Record<string, unknown> | null;
-  updated_at: string | null;
 }
 
 export interface DevinMessage {
   id: string;
-  type: string;
+  source: string;
   message: string;
-  created_at: string;
 }
 
 export class DevinError extends Error {
@@ -106,7 +106,7 @@ export async function getSession(sessionId: string): Promise<DevinSessionDetail>
   return {
     session_id: sessionId,
     status: typeof raw.status === 'string' ? raw.status : null,
-    status_enum: typeof raw.status_enum === 'string' ? raw.status_enum : null,
+    status_detail: typeof raw.status_detail === 'string' ? raw.status_detail : null,
     title: typeof raw.title === 'string' ? raw.title : null,
     url: typeof raw.url === 'string' ? raw.url : null,
     acus_consumed: typeof raw.acus_consumed === 'number' ? raw.acus_consumed : null,
@@ -115,8 +115,17 @@ export async function getSession(sessionId: string): Promise<DevinSessionDetail>
       typeof raw.structured_output === 'object' && raw.structured_output !== null
         ? (raw.structured_output as Record<string, unknown>)
         : null,
-    updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : null,
   };
+}
+
+export function pullRequestUrl(ref: DevinPullRequestRef | undefined): string | null {
+  return ref?.url ?? ref?.pr_url ?? null;
+}
+
+/** Ends an active session. Devin reports the session as `exit` afterwards. */
+export async function terminateSession(sessionId: string): Promise<void> {
+  const { orgId } = requireCredentials();
+  await request(`/v3/organizations/${orgId}/sessions/${sessionId}`, { method: 'DELETE' });
 }
 
 export interface MessagePage {
@@ -126,30 +135,30 @@ export interface MessagePage {
 
 export async function listMessages(sessionId: string, cursor: string | null): Promise<MessagePage> {
   const { orgId } = requireCredentials();
-  const params = new URLSearchParams({ limit: '50' });
+  const params = new URLSearchParams({ first: '50' });
   if (cursor) params.set('after', cursor);
 
   const raw = await request<Record<string, unknown>>(
     `/v3/organizations/${orgId}/sessions/${sessionId}/messages?${params.toString()}`,
   );
 
-  const items = Array.isArray(raw.messages) ? raw.messages : [];
+  const items = Array.isArray(raw.items) ? raw.items : [];
   const messages = items.flatMap((item): DevinMessage[] => {
     if (typeof item !== 'object' || item === null) return [];
     const record = item as Record<string, unknown>;
-    const id = typeof record.id === 'string' ? record.id : null;
+    const id = typeof record.event_id === 'string' ? record.event_id : null;
     if (!id) return [];
     return [
       {
         id,
-        type: typeof record.type === 'string' ? record.type : 'message',
+        source: typeof record.source === 'string' ? record.source : 'devin',
         message: typeof record.message === 'string' ? record.message : '',
-        created_at: typeof record.created_at === 'string' ? record.created_at : new Date().toISOString(),
       },
     ];
   });
 
-  return { messages, cursor: messages.at(-1)?.id ?? cursor };
+  const endCursor = typeof raw.end_cursor === 'string' ? raw.end_cursor : null;
+  return { messages, cursor: endCursor ?? cursor };
 }
 
 export async function sendMessage(sessionId: string, message: string): Promise<void> {

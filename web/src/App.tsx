@@ -16,6 +16,7 @@ export function App() {
   const [selected, setSelected] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [busy, setBusy] = useState<number | null>(null);
 
   const selectedCard = useMemo<CardDto | null>(
     () => board?.cards.find((card) => card.issue.number === selected) ?? null,
@@ -33,6 +34,39 @@ export function App() {
         setActionError(cause instanceof Error ? cause.message : 'Dispatch failed');
       } finally {
         setDispatching(null);
+      }
+    },
+    [refresh],
+  );
+
+  const onStop = useCallback(
+    async (issueNumber: number) => {
+      setBusy(issueNumber);
+      setActionError(null);
+      try {
+        await api.stop(issueNumber);
+        await refresh();
+      } catch (cause) {
+        setActionError(cause instanceof Error ? cause.message : 'Stop failed');
+      } finally {
+        setBusy(null);
+      }
+    },
+    [refresh],
+  );
+
+  const onReset = useCallback(
+    async (issueNumber: number) => {
+      setBusy(issueNumber);
+      setActionError(null);
+      try {
+        await api.reset(issueNumber);
+        setSelected(null);
+        await refresh();
+      } catch (cause) {
+        setActionError(cause instanceof Error ? cause.message : 'Reset failed');
+      } finally {
+        setBusy(null);
       }
     },
     [refresh],
@@ -93,6 +127,10 @@ export function App() {
             <RefreshCw size={12} className={syncing ? 'animate-spin' : undefined} />
             Sync issues
           </Button>
+          <NotificationFeed
+            notifications={board?.notifications ?? []}
+            onClear={() => void api.clearNotifications().then(refresh)}
+          />
         </div>
       </header>
 
@@ -115,27 +153,28 @@ export function App() {
       {board ? (
         <div className="space-y-4">
           <MetricsHeader metrics={board.metrics} />
-          <div className="flex gap-4">
-            <div className="min-w-0 flex-1">
-              <Board
-                cards={board.cards}
-                dispatching={dispatching}
-                canDispatch={board.integrations.devinConfigured}
-                onDispatch={(issueNumber) => void onDispatch(issueNumber)}
-                onOpen={(card) => setSelected(card.issue.number)}
-              />
-            </div>
-            <NotificationFeed
-              notifications={board.notifications}
-              onClear={() => void api.clearNotifications().then(refresh)}
-            />
-          </div>
+          <Board
+            cards={board.cards}
+            dispatching={dispatching}
+            busy={busy}
+            canDispatch={board.integrations.devinConfigured}
+            onDispatch={(issueNumber) => void onDispatch(issueNumber)}
+            onStop={(issueNumber) => void onStop(issueNumber)}
+            onReset={(issueNumber) => void onReset(issueNumber)}
+            onOpen={(card) => setSelected(card.issue.number)}
+          />
         </div>
       ) : (
         <p className="text-xs text-muted">Loading board…</p>
       )}
 
-      <RunDrawer card={selectedCard} onClose={() => setSelected(null)} />
+      <RunDrawer
+        card={selectedCard}
+        busy={busy === selectedCard?.issue.number}
+        onStop={(issueNumber) => void onStop(issueNumber)}
+        onReset={(issueNumber) => void onReset(issueNumber)}
+        onClose={() => setSelected(null)}
+      />
     </div>
   );
 }

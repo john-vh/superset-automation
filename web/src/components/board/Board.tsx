@@ -6,12 +6,15 @@ import { IssueCard } from './IssueCard';
 export interface BoardProps {
   cards: CardDto[];
   dispatching: number | null;
+  busy: number | null;
   canDispatch: boolean;
   onDispatch: (issueNumber: number) => void;
+  onStop: (issueNumber: number) => void;
+  onReset: (issueNumber: number) => void;
   onOpen: (card: CardDto) => void;
 }
 
-export function Board({ cards, dispatching, canDispatch, onDispatch, onOpen }: BoardProps) {
+export function Board({ cards, dispatching, busy, canDispatch, onDispatch, onStop, onReset, onOpen }: BoardProps) {
   const attention = cards.filter((card) => card.phase === 'attention');
 
   return (
@@ -27,8 +30,11 @@ export function Board({ cards, dispatching, canDispatch, onDispatch, onOpen }: B
                 key={card.issue.number}
                 card={card}
                 dispatching={dispatching === card.issue.number}
+                busy={busy === card.issue.number}
                 canDispatch={canDispatch}
                 onDispatch={onDispatch}
+                onStop={onStop}
+                onReset={onReset}
                 onOpen={onOpen}
               />
             ))}
@@ -54,8 +60,11 @@ export function Board({ cards, dispatching, canDispatch, onDispatch, onOpen }: B
                       key={card.issue.number}
                       card={card}
                       dispatching={dispatching === card.issue.number}
+                      busy={busy === card.issue.number}
                       canDispatch={canDispatch}
                       onDispatch={onDispatch}
+                      onStop={onStop}
+                      onReset={onReset}
                       onOpen={onOpen}
                     />
                   ))

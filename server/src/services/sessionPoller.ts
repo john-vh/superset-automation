@@ -1,12 +1,16 @@
-import { phaseRank } from '../../../shared/board.js';
+import { TERMINAL_RUN_STATUSES, phaseRank } from '../../../shared/board.js';
 import type { Phase, RunDto } from '../../../shared/types.js';
 import { config, devinConfigured } from '../config.js';
-import { getSession, listMessages, type DevinSessionDetail } from '../devin/client.js';
+import { getSession, listMessages, pullRequestUrl, type DevinSessionDetail } from '../devin/client.js';
 import { inferPhase, mapSessionStatus } from '../devin/phase.js';
 import { nowIso } from '../db/index.js';
 import { publishBoard, publishNotification } from '../events/bus.js';
 import { addRunEvent, getMessageCursor, listActiveRuns, updateRun } from '../store/runs.js';
 import { pullRequestNumberFromUrl, trackPullRequest } from './prTracking.js';
+
+function isTerminal(status: RunDto['status']): boolean {
+  return TERMINAL_RUN_STATUSES.includes(status);
+}
 
 /** Phases only move forward; a stray message never drags a card backwards. */
 function furthest(current: Phase, candidate: Phase | null): Phase {
@@ -41,32 +45,41 @@ async function ingestMessages(run: RunDto): Promise<Phase | null> {
 function notifyStatusChange(run: RunDto, status: RunDto['status'], detail: DevinSessionDetail, prNumber: number | null): void {
   if (status === run.status) return;
 
+  const reported = [detail.status, detail.status_detail].filter(Boolean).join(' · ');
+
   addRunEvent({
     runId: run.id,
-    kind: status === 'failed' ? 'error' : 'system',
+    kind: status === 'failed' || status === 'stopped' ? 'error' : 'system',
     source: 'devin',
-    message: `Session status: ${detail.status_enum ?? detail.status ?? status}`,
+    message: `Session status: ${reported || status}`,
   });
 
   if (status === 'failed') {
     publishNotification({
       level: 'error',
       title: `Devin session failed for #${run.issueNumber}`,
-      body: detail.status ?? '',
+      body: reported,
+      issueNumber: run.issueNumber,
+    });
+  } else if (status === 'stopped') {
+    publishNotification({
+      level: 'error',
+      title: `Devin session ended for #${run.issueNumber}`,
+      body: reported || 'The session is no longer running.',
       issueNumber: run.issueNumber,
     });
   } else if (status === 'blocked') {
     publishNotification({
       level: 'warning',
       title: `Devin needs input on #${run.issueNumber}`,
-      body: detail.status ?? '',
+      body: reported,
       issueNumber: run.issueNumber,
     });
   } else if (status === 'finished') {
     publishNotification({
       level: prNumber ? 'success' : 'warning',
       title: prNumber
-        ? `Devin opened PR #${prNumber} for issue #${run.issueNumber}`
+        ? `PR #${prNumber} is ready for your review on issue #${run.issueNumber}`
         : `Devin finished #${run.issueNumber} without opening a PR`,
       issueNumber: run.issueNumber,
     });
@@ -77,22 +90,28 @@ export async function pollRun(run: RunDto): Promise<void> {
   if (!run.sessionId) return;
 
   const detail = await getSession(run.sessionId);
-  const messagePhase = await ingestMessages(run);
 
-  const prRef = detail.pull_requests.at(0);
-  const prNumber = prRef?.number ?? pullRequestNumberFromUrl(prRef?.url);
+  // Message ingestion is best-effort: a failure here must not stop the status from landing.
+  let messagePhase: Phase | null = null;
+  try {
+    messagePhase = await ingestMessages(run);
+  } catch (error) {
+    console.error('[session-poller] message ingest failed:', error instanceof Error ? error.message : error);
+  }
+
+  const prNumber = pullRequestNumberFromUrl(pullRequestUrl(detail.pull_requests.at(0)));
   if (prNumber) await trackPullRequest({ number: prNumber, issueNumber: run.issueNumber, runId: run.id });
 
-  const status = mapSessionStatus(detail.status_enum ?? detail.status);
+  const status = mapSessionStatus(detail.status, detail.status_detail);
   let phase = furthest(run.phase, messagePhase);
   if (prNumber) phase = furthest(phase, 'review');
-  if (status === 'failed' || status === 'blocked') phase = 'attention';
+  if (status === 'failed' || status === 'blocked' || status === 'stopped') phase = 'attention';
 
-  const terminal = status === 'finished' || status === 'failed';
+  const terminal = isTerminal(status);
   updateRun(run.id, {
     status,
     phase,
-    statusDetail: detail.status ?? null,
+    statusDetail: detail.status_detail ?? detail.status ?? null,
     acus: detail.acus_consumed ?? run.acus,
     sessionUrl: detail.url ?? run.sessionUrl,
     finishedAt: terminal ? (run.finishedAt ?? nowIso()) : null,

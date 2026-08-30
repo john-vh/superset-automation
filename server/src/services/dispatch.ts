@@ -1,10 +1,13 @@
 import type { RunDto } from '../../../shared/types.js';
 import { config, devinConfigured, githubRepo } from '../config.js';
-import { createSession } from '../devin/client.js';
+import { DevinError, createSession, terminateSession } from '../devin/client.js';
 import { buildPrompt } from '../devin/prompt.js';
 import { publishBoard, publishNotification } from '../events/bus.js';
 import { getIssue } from '../store/issues.js';
-import { addRunEvent, createRun, getLatestRunForIssue, updateRun } from '../store/runs.js';
+import { deletePullRequestsForIssue } from '../store/pullRequests.js';
+import { addRunEvent, createRun, deleteRunsForIssue, getLatestRunForIssue, updateRun } from '../store/runs.js';
+import { nowIso } from '../db/index.js';
+import { isRunActive } from '../../../shared/board.js';
 
 export class DispatchError extends Error {
   constructor(
@@ -16,7 +19,68 @@ export class DispatchError extends Error {
   }
 }
 
-const ACTIVE_STATUSES = new Set(['pending', 'running', 'blocked']);
+/** Ends the running session for an issue and marks the run stopped. */
+export async function stopIssueRun(issueNumber: number): Promise<RunDto> {
+  const run = getLatestRunForIssue(issueNumber);
+  if (!run) throw new DispatchError(`Issue #${issueNumber} has no Devin session`, 404);
+  if (!isRunActive(run.status)) throw new DispatchError(`Session for #${issueNumber} is already over`, 409);
+
+  if (run.sessionId) {
+    try {
+      await terminateSession(run.sessionId);
+    } catch (error) {
+      // A session Devin already ended is fine; anything else is a real failure.
+      if (!(error instanceof DevinError) || error.status < 400 || error.status >= 500) throw error;
+    }
+  }
+
+  const stopped = updateRun(run.id, {
+    status: 'stopped',
+    phase: 'attention',
+    statusDetail: 'Stopped from the board',
+    finishedAt: run.finishedAt ?? nowIso(),
+  });
+
+  addRunEvent({ runId: run.id, kind: 'error', source: 'user', message: 'Session stopped from the board' });
+  publishNotification({
+    level: 'error',
+    title: `Devin session stopped for #${issueNumber}`,
+    body: 'Reset the card to run it again.',
+    issueNumber,
+  });
+  publishBoard();
+
+  return stopped as RunDto;
+}
+
+/**
+ * Clears every run and tracked pull request for an issue so the card returns to the backlog
+ * and can be dispatched again. Intended for demos and for unsticking a stopped session.
+ */
+export async function resetIssue(issueNumber: number): Promise<void> {
+  const issue = getIssue(issueNumber);
+  if (!issue) throw new DispatchError(`Issue #${issueNumber} is not on the board`, 404);
+
+  const run = getLatestRunForIssue(issueNumber);
+  if (run && isRunActive(run.status) && run.sessionId) {
+    try {
+      await terminateSession(run.sessionId);
+    } catch (error) {
+      console.error('[reset] could not terminate session:', error instanceof Error ? error.message : error);
+    }
+  }
+
+  deleteRunsForIssue(issueNumber);
+  deletePullRequestsForIssue(issueNumber);
+
+  publishNotification({
+    level: 'info',
+    title: `Reset #${issueNumber}`,
+    body: 'Session history cleared; the issue is back in the backlog.',
+    issueNumber,
+  });
+  publishBoard();
+}
 
 /**
  * Creates a Devin session for an issue. Refuses to start a second session while an
@@ -28,7 +92,7 @@ export async function dispatchIssue(issueNumber: number): Promise<RunDto> {
   if (!devinConfigured) throw new DispatchError('DEVIN_API_KEY and DEVIN_ORG_ID are not configured', 503);
 
   const existing = getLatestRunForIssue(issueNumber);
-  if (existing && ACTIVE_STATUSES.has(existing.status)) {
+  if (existing && isRunActive(existing.status)) {
     throw new DispatchError(`Issue #${issueNumber} already has an active Devin session`, 409);
   }
 

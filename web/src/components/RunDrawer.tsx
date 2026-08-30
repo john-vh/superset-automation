@@ -1,13 +1,14 @@
-import { PHASE_LABELS } from '@shared/board';
+import { PHASE_LABELS, RUN_STATUS_LABELS, isRunActive } from '@shared/board';
 import type { CardDto, RunDetailDto, RunEventDto } from '@shared/types';
-import { ExternalLink, GitPullRequest, Sparkles } from 'lucide-react';
+import { ExternalLink, GitPullRequest, RotateCcw, Sparkles, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CheckList } from '@/components/board/CheckList';
 import { PhaseProgress } from '@/components/board/PhaseProgress';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Drawer } from '@/components/ui/drawer';
 import { api } from '@/lib/api';
-import { PHASE_TONES } from '@/lib/phase';
+import { PHASE_TONES, RUN_STATUS_TONES } from '@/lib/phase';
 import { formatRelative } from '@/lib/utils';
 
 const EVENT_TONES = {
@@ -19,10 +20,13 @@ const EVENT_TONES = {
 
 export interface RunDrawerProps {
   card: CardDto | null;
+  busy: boolean;
+  onStop: (issueNumber: number) => void;
+  onReset: (issueNumber: number) => void;
   onClose: () => void;
 }
 
-export function RunDrawer({ card, onClose }: RunDrawerProps) {
+export function RunDrawer({ card, busy, onStop, onReset, onClose }: RunDrawerProps) {
   const [detail, setDetail] = useState<RunDetailDto | null>(null);
   const runId = card?.run?.id ?? null;
 
@@ -43,13 +47,15 @@ export function RunDrawer({ card, onClose }: RunDrawerProps) {
   if (!card) return null;
   const { issue, run, pullRequest } = card;
   const events: RunEventDto[] = detail?.events ?? [];
+  const active = run ? isRunActive(run.status) : false;
+  const awaitingReview = pullRequest?.state === 'open' && !pullRequest.merged;
 
   return (
     <Drawer open onOpenChange={(open) => !open && onClose()} title={issue.title} description={`#${issue.number} · ${issue.repo}`}>
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={PHASE_TONES[card.phase]}>{PHASE_LABELS[card.phase]}</Badge>
-          {run ? <Badge tone={run.status === 'failed' ? 'danger' : 'neutral'}>{run.status}</Badge> : null}
+          {run ? <Badge tone={RUN_STATUS_TONES[run.status]}>{RUN_STATUS_LABELS[run.status]}</Badge> : null}
           <a href={issue.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted hover:text-text">
             Issue <ExternalLink size={11} />
           </a>
@@ -73,19 +79,53 @@ export function RunDrawer({ card, onClose }: RunDrawerProps) {
                 <dd className="text-text">{formatRelative(run.createdAt)}</dd>
               </div>
               <div>
-                <dt className="text-faint">Updated</dt>
-                <dd className="text-text">{formatRelative(run.updatedAt)}</dd>
+                <dt className="text-faint">{run.finishedAt ? 'Ended' : 'Updated'}</dt>
+                <dd className="text-text">{formatRelative(run.finishedAt ?? run.updatedAt)}</dd>
               </div>
             </dl>
             {run.statusDetail ? <p className="text-xs text-muted">{run.statusDetail}</p> : null}
             {run.error ? <p className="text-xs text-danger">{run.error}</p> : null}
+            {!active && run.status !== 'finished' ? (
+              <p className="text-xs text-danger">
+                This session is over and is no longer making progress. Reset the issue to run it again.
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {active ? (
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  className="border-danger/50 text-danger hover:border-danger"
+                  onClick={() => onStop(issue.number)}
+                >
+                  <Square size={12} />
+                  {busy ? 'Stopping…' : 'Stop session'}
+                </Button>
+              ) : null}
+              <Button
+                size="sm"
+                disabled={busy}
+                title="Clear this issue's run history and tracked PR so it can be dispatched again"
+                onClick={() => onReset(issue.number)}
+              >
+                <RotateCcw size={12} />
+                {busy ? 'Resetting…' : 'Reset to backlog'}
+              </Button>
+            </div>
           </section>
         ) : (
           <p className="text-xs text-muted">No Devin session has been started for this issue yet.</p>
         )}
 
         {pullRequest ? (
-          <section className="space-y-2 rounded-lg border border-line bg-surface-raised p-3">
+          <section
+            className={`space-y-2 rounded-lg border bg-surface-raised p-3 ${
+              awaitingReview ? 'border-info/60 ring-1 ring-info/25' : 'border-line'
+            }`}
+          >
+            {awaitingReview ? (
+              <p className="text-xs font-medium text-info">Your review is needed</p>
+            ) : null}
             <a href={pullRequest.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-info hover:underline">
               <GitPullRequest size={14} />#{pullRequest.number} {pullRequest.title}
             </a>
@@ -95,6 +135,11 @@ export function RunDrawer({ card, onClose }: RunDrawerProps) {
               </Badge>
               <CheckList checks={pullRequest.checks} />
             </div>
+            <p className="text-[11px] text-muted">
+              {pullRequest.merged
+                ? 'Merged — this issue counts as done.'
+                : 'The issue only moves to Merged once you merge this pull request.'}
+            </p>
           </section>
         ) : null}
 

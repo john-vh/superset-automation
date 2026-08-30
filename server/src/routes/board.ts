@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { publishBoard, subscribe } from '../events/bus.js';
 import { buildBoard } from '../services/board.js';
-import { DispatchError, dispatchIssue } from '../services/dispatch.js';
+import { DispatchError, dispatchIssue, resetIssue, stopIssueRun } from '../services/dispatch.js';
 import { syncIssues } from '../services/issueSync.js';
 import { pollActiveRuns } from '../services/sessionPoller.js';
 import { getIssue } from '../store/issues.js';
@@ -50,6 +50,43 @@ boardRouter.post('/issues/:number/dispatch', async (req, res) => {
       return;
     }
     res.status(500).json({ error: error instanceof Error ? error.message : 'Dispatch failed' });
+  }
+});
+
+boardRouter.post('/issues/:number/stop', async (req, res) => {
+  const issueNumber = Number(req.params.number);
+  if (!Number.isInteger(issueNumber)) {
+    res.status(400).json({ error: 'Issue number must be an integer' });
+    return;
+  }
+
+  try {
+    res.json({ run: await stopIssueRun(issueNumber) });
+  } catch (error) {
+    if (error instanceof DispatchError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+    res.status(502).json({ error: error instanceof Error ? error.message : 'Stop failed' });
+  }
+});
+
+boardRouter.post('/issues/:number/reset', async (req, res) => {
+  const issueNumber = Number(req.params.number);
+  if (!Number.isInteger(issueNumber)) {
+    res.status(400).json({ error: 'Issue number must be an integer' });
+    return;
+  }
+
+  try {
+    await resetIssue(issueNumber);
+    res.status(204).end();
+  } catch (error) {
+    if (error instanceof DispatchError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Reset failed' });
   }
 });
 

@@ -6,18 +6,42 @@ const STATUS_MAP: Record<string, RunStatus> = {
   resuming: 'running',
   running: 'running',
   working: 'running',
-  suspended: 'blocked',
+  suspended: 'stopped',
   blocked: 'blocked',
-  expired: 'failed',
+  expired: 'stopped',
   error: 'failed',
   exit: 'finished',
   finished: 'finished',
-  stopped: 'finished',
+  stopped: 'stopped',
 };
 
-export function mapSessionStatus(status: string | null): RunStatus {
+/** Reasons a suspended session is a failure rather than a deliberate stop. */
+const FAILURE_DETAILS = new Set([
+  'error',
+  'out_of_credits',
+  'out_of_quota',
+  'no_quota_allocation',
+  'payment_declined',
+  'usage_limit_exceeded',
+  'org_usage_limit_exceeded',
+  'user_usage_limit_exceeded',
+  'total_session_limit_exceeded',
+]);
+
+/**
+ * Maps a Devin `status` (new, claimed, running, exit, error, suspended, resuming) to a run
+ * status, using `status_detail` to tell a completed session apart from one that needs the
+ * user, and a deliberate stop apart from a quota or platform failure.
+ */
+export function mapSessionStatus(status: string | null, detail: string | null = null): RunStatus {
   if (!status) return 'pending';
-  return STATUS_MAP[status.toLowerCase()] ?? 'running';
+  const normalizedDetail = detail?.toLowerCase() ?? null;
+  const mapped = STATUS_MAP[status.toLowerCase()] ?? 'running';
+
+  if (normalizedDetail && FAILURE_DETAILS.has(normalizedDetail)) return 'failed';
+  if (mapped === 'running' && normalizedDetail === 'finished') return 'finished';
+  if (mapped === 'running' && normalizedDetail?.startsWith('waiting_for_')) return 'blocked';
+  return mapped;
 }
 
 const PHASE_HINTS: Array<{ phase: Phase; patterns: RegExp[] }> = [

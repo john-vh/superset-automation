@@ -13,7 +13,7 @@ export type Phase =
   | 'done'
   | 'attention';
 
-export type RunStatus = 'pending' | 'running' | 'blocked' | 'finished' | 'failed';
+export type RunStatus = 'pending' | 'running' | 'blocked' | 'finished' | 'failed' | 'stopped';
 
 export type CheckState = 'queued' | 'in_progress' | 'success' | 'failure' | 'neutral' | 'cancelled' | 'skipped';
 
@@ -98,6 +98,9 @@ export interface MetricsDto {
   checksPassing: number;
   checksFailing: number;
   acusConsumed: number;
+  /** `acusConsumed` priced at ACU_RATE_USD, or null when no rate is configured. */
+  estimatedCostUsd: number | null;
+  acuRateUsd: number | null;
   medianTimeToPrMs: number | null;
   successRate: number | null;
 }
