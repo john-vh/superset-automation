@@ -45,6 +45,12 @@ export function listActiveRuns(): RunDto[] {
   return rows.map(toRunDto);
 }
 
+/** Drops every run and event for an issue so the card falls back to the backlog. */
+export function deleteRunsForIssue(issueNumber: number): number {
+  const result = db().prepare('DELETE FROM runs WHERE issue_number = ?').run(issueNumber);
+  return result.changes;
+}
+
 export interface RunUpdate {
   sessionId?: string | null;
   sessionUrl?: string | null;
@@ -69,8 +75,15 @@ const COLUMN_BY_FIELD: Record<keyof RunUpdate, string> = {
   finishedAt: 'finished_at',
 };
 
+/**
+ * Writes only the fields that actually changed. Without this the session poller would touch
+ * `updated_at` on every tick and the board could never show when a run last made progress.
+ */
 export function updateRun(id: string, update: RunUpdate): RunDto | null {
-  const entries = Object.entries(update).filter(([, value]) => value !== undefined);
+  const current = getRun(id);
+  const entries = Object.entries(update).filter(
+    ([field, value]) => value !== undefined && (!current || current[field as keyof RunDto] !== value),
+  );
   if (entries.length > 0) {
     const assignments = entries.map(([field]) => `${COLUMN_BY_FIELD[field as keyof RunUpdate]} = ?`);
     const values = entries.map(([, value]) => value as string | number | null);

@@ -1,6 +1,15 @@
-import type { CheckState, Phase } from '@shared/types';
+import type { CheckState, Phase, RunStatus } from '@shared/types';
 
 type Tone = 'neutral' | 'active' | 'success' | 'warning' | 'danger' | 'info';
+
+export const RUN_STATUS_TONES: Record<RunStatus, Tone> = {
+  pending: 'neutral',
+  running: 'active',
+  blocked: 'warning',
+  finished: 'success',
+  failed: 'danger',
+  stopped: 'danger',
+};
 
 export const PHASE_TONES: Record<Phase, Tone> = {
   backlog: 'neutral',

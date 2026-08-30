@@ -78,6 +78,14 @@ describe('resolvePhase', () => {
   it('is done once the pull request merges', () => {
     expect(resolvePhase(issue, run, { ...pr, merged: true, state: 'closed' })).toBe('done');
   });
+
+  it('keeps an open pull request in review even when the run says it is done', () => {
+    expect(resolvePhase(issue, { ...run, phase: 'done', status: 'finished' }, pr)).toBe('review');
+  });
+
+  it('flags a stopped run for attention', () => {
+    expect(resolvePhase(issue, { ...run, status: 'stopped' }, null)).toBe('attention');
+  });
 });
 
 describe('board aggregation', () => {
@@ -101,5 +109,18 @@ describe('board aggregation', () => {
     const metrics = buildMetrics(cards);
     expect(metrics).toMatchObject({ issuesOpen: 1, runsActive: 1, prsOpen: 1, checksPassing: 1, acusConsumed: 2 });
     expect(metrics.medianTimeToPrMs).toBeGreaterThan(0);
+    expect(metrics.estimatedCostUsd).toBe(Number((2 * (metrics.acuRateUsd ?? 0)).toFixed(2)));
+  });
+
+  it('leaves updated_at alone when a poll reports no change', async () => {
+    upsertIssue(issue);
+    const created = createRun(issue.number);
+    updateRun(created.id, { status: 'running' });
+    const settled = buildCards()[0]?.run?.updatedAt;
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    updateRun(created.id, { status: 'running' });
+
+    expect(buildCards()[0]?.run?.updatedAt).toBe(settled);
   });
 });

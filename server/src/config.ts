@@ -25,6 +25,8 @@ const schema = z.object({
   DEVIN_ORG_ID: z.string().optional(),
   DEVIN_PLAYBOOK_ID: z.string().optional(),
   DEVIN_MAX_ACU: z.coerce.number().optional(),
+  /** Price of one ACU, used for the cost estimate on the board. */
+  ACU_RATE_USD: z.coerce.number().default(2.25),
 
   /** Public base URL Devin sessions call back to (a tunnel when running locally). */
   APP_BASE_URL: z.string().default('http://localhost:8787'),

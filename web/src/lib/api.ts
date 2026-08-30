@@ -17,6 +17,8 @@ export const api = {
   board: () => request<BoardDto>('/api/board'),
   runDetail: (runId: string) => request<RunDetailDto>(`/api/runs/${runId}`),
   dispatch: (issueNumber: number) => request<void>(`/api/issues/${issueNumber}/dispatch`, { method: 'POST' }),
+  stop: (issueNumber: number) => request<void>(`/api/issues/${issueNumber}/stop`, { method: 'POST' }),
+  reset: (issueNumber: number) => request<void>(`/api/issues/${issueNumber}/reset`, { method: 'POST' }),
   sync: (full = false) => request<{ synced: number }>(`/api/sync?full=${full}`, { method: 'POST' }),
   clearNotifications: () => request<void>('/api/notifications', { method: 'DELETE' }),
 };

@@ -65,6 +65,12 @@ export function getPullRequestForIssue(issueNumber: number): PullRequestDto | nu
   return row ? toPullRequestDto(row, listChecks(row.number)) : null;
 }
 
+/** Detaches tracked pull requests from an issue; the PRs themselves are left on GitHub. */
+export function deletePullRequestsForIssue(issueNumber: number): number {
+  const result = db().prepare('DELETE FROM pull_requests WHERE issue_number = ?').run(issueNumber);
+  return result.changes;
+}
+
 export function listPullRequests(): PullRequestDto[] {
   const rows = db().prepare('SELECT * FROM pull_requests ORDER BY number DESC').all() as PullRequestRow[];
   return rows.map((row) => toPullRequestDto(row, listChecks(row.number)));
