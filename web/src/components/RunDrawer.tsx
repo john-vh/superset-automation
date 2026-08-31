@@ -100,32 +100,35 @@ export function RunDrawer({ card, busy, onStop, onReset, onClose }: RunDrawerPro
                 This session is over and is no longer making progress. Reset the issue to run it again.
               </p>
             ) : null}
-            <div className="flex flex-wrap gap-2 pt-1">
-              {working ? (
-                <Button
-                  size="sm"
-                  disabled={busy}
-                  className="border-danger/50 text-danger hover:border-danger"
-                  onClick={() => onStop(issue.number)}
-                >
-                  <Square size={12} />
-                  {busy ? 'Stopping…' : 'Stop session'}
-                </Button>
-              ) : null}
-              <Button
-                size="sm"
-                disabled={busy}
-                title="Clear this issue's run history and tracked PR so it can be dispatched again"
-                onClick={() => onReset(issue.number)}
-              >
-                <RotateCcw size={12} />
-                {busy ? 'Resetting…' : 'Reset to backlog'}
-              </Button>
-            </div>
           </section>
         ) : (
           <p className="text-xs text-muted">No Devin session has been started for this issue yet.</p>
         )}
+
+        {run || pullRequest ? (
+          <div className="flex flex-wrap gap-2">
+            {working ? (
+              <Button
+                size="sm"
+                disabled={busy}
+                className="border-danger/50 text-danger hover:border-danger"
+                onClick={() => onStop(issue.number)}
+              >
+                <Square size={12} />
+                {busy ? 'Stopping…' : 'Stop session'}
+              </Button>
+            ) : null}
+            <Button
+              size="sm"
+              disabled={busy}
+              title="Clear this issue's run history and tracked PR so it can be dispatched again"
+              onClick={() => onReset(issue.number)}
+            >
+              <RotateCcw size={12} />
+              {busy ? 'Resetting…' : 'Reset to backlog'}
+            </Button>
+          </div>
+        ) : null}
 
         {pullRequest ? (
           <section

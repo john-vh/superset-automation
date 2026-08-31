@@ -31,11 +31,12 @@ export const BOARD_COLUMNS: ColumnDefinition[] = [
     description: 'Pull request open — merge it to finish the issue',
     accepts: ['review'],
   },
+  { key: 'merged', title: 'Merged', description: 'Pull request merged — the issue is done', accepts: ['merged'] },
   {
-    key: 'merged',
-    title: 'Merged',
-    description: 'Pull request merged, or the issue was closed without one',
-    accepts: ['merged', 'closed'],
+    key: 'closed',
+    title: 'Closed',
+    description: 'Issue closed without a merged pull request',
+    accepts: ['closed'],
   },
 ];
 

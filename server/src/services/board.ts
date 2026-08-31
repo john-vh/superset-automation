@@ -10,7 +10,7 @@ import type {
 import { TERMINAL_RUN_STATUSES } from '../../../shared/board.js';
 import { config, devinConfigured, githubConfigured, githubRepo } from '../config.js';
 import { listIssues } from '../store/issues.js';
-import { getMeta } from '../store/meta.js';
+import { getMeta, isIssueReset } from '../store/meta.js';
 import { listNotifications } from '../store/notifications.js';
 import { getPullRequestForIssue, listPullRequests } from '../store/pullRequests.js';
 import { getLatestRunForIssue, listRuns } from '../store/runs.js';
@@ -33,6 +33,9 @@ export function resolvePhase(issue: IssueDto, run: RunDto | null, pr: PullReques
   if (!run) return issue.state === 'closed' ? 'closed' : 'backlog';
   if (run.status === 'failed' || run.status === 'blocked' || run.status === 'stopped') return 'attention';
   if (run.status === 'finished') return issue.state === 'closed' ? 'closed' : 'attention';
+  // `review` and `merged` are claims about a pull request. Without one tracked, the session is
+  // still Devin's to finish, so the card must not sit in a column that asks the user to act.
+  if (run.phase === 'review' || run.phase === 'merged') return 'validating';
   return run.phase;
 }
 
@@ -40,7 +43,8 @@ export function buildCards(): CardDto[] {
   return listIssues().map((issue) => {
     const run = getLatestRunForIssue(issue.number);
     const pullRequest = getPullRequestForIssue(issue.number);
-    const phase = resolvePhase(issue, run, pullRequest);
+    const cleared = !run && !pullRequest && isIssueReset(issue.number);
+    const phase: Phase = cleared ? 'backlog' : resolvePhase(issue, run, pullRequest);
     return { issue, run, pullRequest, phase, needsAttention: phase === 'attention' };
   });
 }

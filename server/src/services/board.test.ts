@@ -3,7 +3,9 @@ import type { IssueDto, PullRequestDto, RunDto } from '../../../shared/types.js'
 import { createDb, setDb } from '../db/index.js';
 import { upsertIssue } from '../store/issues.js';
 import { upsertCheck, upsertPullRequest } from '../store/pullRequests.js';
+import { markIssueReset } from '../store/meta.js';
 import { createRun, updateRun } from '../store/runs.js';
+import { resetIssue } from './dispatch.js';
 import { buildCards, buildMetrics, resolvePhase } from './board.js';
 
 const issue: IssueDto = {
@@ -93,6 +95,12 @@ describe('resolvePhase', () => {
   it('flags a stopped run for attention', () => {
     expect(resolvePhase(issue, { ...run, status: 'stopped' }, null)).toBe('attention');
   });
+
+  it('keeps a session that claims review or merge without a pull request on Devin\u2019s side', () => {
+    expect(resolvePhase(issue, { ...run, phase: 'review' }, null)).toBe('validating');
+    expect(resolvePhase(issue, { ...run, phase: 'merged' }, null)).toBe('validating');
+    expect(resolvePhase(issue, { ...run, phase: 'review', status: 'finished' }, null)).toBe('attention');
+  });
 });
 
 describe('board aggregation', () => {
@@ -117,6 +125,39 @@ describe('board aggregation', () => {
     expect(metrics).toMatchObject({ issuesOpen: 1, runsActive: 1, prsOpen: 1, checksPassing: 1, acusConsumed: 2 });
     expect(metrics.medianTimeToPrMs).toBeGreaterThan(0);
     expect(metrics.estimatedCostUsd).toBe(Number((2 * (metrics.acuRateUsd ?? 0)).toFixed(2)));
+  });
+
+  it('returns a reset issue to the backlog even after its pull request merged', async () => {
+    upsertIssue({ ...issue, state: 'closed' });
+    const created = createRun(issue.number);
+    upsertPullRequest({ ...pr, runId: created.id, issueNumber: null, state: 'closed', merged: true });
+    expect(buildCards()[0]?.phase).toBe('merged');
+
+    await resetIssue(issue.number);
+
+    const card = buildCards()[0];
+    expect(card?.phase).toBe('backlog');
+    expect(card?.run).toBeNull();
+    expect(card?.pullRequest).toBeNull();
+  });
+
+  it('shows a merged pull request as merged, and an issue closed without one as closed', () => {
+    upsertIssue({ ...issue, state: 'closed' });
+    const created = createRun(issue.number);
+    updateRun(created.id, { status: 'finished' });
+    expect(buildCards()[0]?.phase).toBe('closed');
+
+    upsertPullRequest({ ...pr, runId: created.id, state: 'closed', merged: true });
+    expect(buildCards()[0]?.phase).toBe('merged');
+  });
+
+  it('ignores a stale reset marker once the issue is dispatched again', () => {
+    upsertIssue(issue);
+    markIssueReset(issue.number, new Date().toISOString());
+    const created = createRun(issue.number);
+    updateRun(created.id, { status: 'running', phase: 'implementing' });
+
+    expect(buildCards()[0]?.phase).toBe('implementing');
   });
 
   it('leaves updated_at alone when a poll reports no change', async () => {
