@@ -21,4 +21,5 @@ export const api = {
   reset: (issueNumber: number) => request<void>(`/api/issues/${issueNumber}/reset`, { method: 'POST' }),
   sync: (full = false) => request<{ synced: number }>(`/api/sync?full=${full}`, { method: 'POST' }),
   clearNotifications: () => request<void>('/api/notifications', { method: 'DELETE' }),
+  dismissNotification: (id: string) => request<void>(`/api/notifications/${id}`, { method: 'DELETE' }),
 };

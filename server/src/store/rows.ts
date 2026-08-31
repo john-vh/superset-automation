@@ -1,9 +1,9 @@
+import { normalizePhase } from '../../../shared/board.js';
 import type {
   CheckDto,
   CheckState,
   IssueDto,
   NotificationDto,
-  Phase,
   PullRequestDto,
   RunDto,
   RunEventDto,
@@ -113,7 +113,7 @@ export function toRunDto(row: RunRow): RunDto {
     issueNumber: row.issue_number,
     sessionId: row.session_id,
     sessionUrl: row.session_url,
-    phase: row.phase as Phase,
+    phase: normalizePhase(row.phase),
     status: row.status as RunStatus,
     statusDetail: row.status_detail,
     acus: row.acus,
@@ -129,7 +129,7 @@ export function toRunEventDto(row: RunEventRow): RunEventDto {
     id: row.id,
     runId: row.run_id,
     kind: row.kind as RunEventDto['kind'],
-    phase: row.phase as Phase | null,
+    phase: row.phase === null ? null : normalizePhase(row.phase),
     message: row.message,
     source: row.source as RunEventDto['source'],
     createdAt: row.created_at,

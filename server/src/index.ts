@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { config, devinConfigured, githubConfigured, githubRepo } from './config.js';
 import { db } from './db/index.js';
 import { startIssueSyncWorker } from './services/issueSync.js';
+import { startPullRequestPoller } from './services/prPoller.js';
 import { startSessionPoller } from './services/sessionPoller.js';
 
 db();
@@ -16,4 +17,5 @@ app.listen(config.PORT, () => {
 
   startIssueSyncWorker();
   startSessionPoller();
+  startPullRequestPoller();
 });

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { CALLBACK_PHASES } from '../../../shared/board.js';
+import { CALLBACK_PHASES, normalizePhase } from '../../../shared/board.js';
 import type { Phase } from '../../../shared/types.js';
 import { config } from '../config.js';
 import { publishBoard, publishNotification } from '../events/bus.js';
@@ -11,7 +11,8 @@ export const devinCallbackRouter: Router = Router();
 
 const REPORTABLE_PHASES: [Phase, ...Phase[]] = ['attention', ...CALLBACK_PHASES];
 
-const phaseSchema = z.enum(REPORTABLE_PHASES);
+/** `done` is accepted for the published playbook; only a merged PR moves a card past review. */
+const phaseSchema = z.enum([...REPORTABLE_PHASES, 'done'] as [string, ...string[]]).transform(normalizePhase);
 
 const callbackSchema = z
   .object({

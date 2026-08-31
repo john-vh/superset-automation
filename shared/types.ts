@@ -10,7 +10,8 @@ export type Phase =
   | 'implementing'
   | 'validating'
   | 'review'
-  | 'done'
+  | 'merged'
+  | 'closed'
   | 'attention';
 
 export type RunStatus = 'pending' | 'running' | 'blocked' | 'finished' | 'failed' | 'stopped';

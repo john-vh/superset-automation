@@ -3,9 +3,10 @@ import { publishBoard, subscribe } from '../events/bus.js';
 import { buildBoard } from '../services/board.js';
 import { DispatchError, dispatchIssue, resetIssue, stopIssueRun } from '../services/dispatch.js';
 import { syncIssues } from '../services/issueSync.js';
+import { pollOpenPullRequests } from '../services/prPoller.js';
 import { pollActiveRuns } from '../services/sessionPoller.js';
 import { getIssue } from '../store/issues.js';
-import { clearNotifications } from '../store/notifications.js';
+import { clearNotifications, deleteNotification } from '../store/notifications.js';
 import { getPullRequestForIssue } from '../store/pullRequests.js';
 import { getRun, listRunEvents } from '../store/runs.js';
 
@@ -94,6 +95,7 @@ boardRouter.post('/sync', async (req, res) => {
   try {
     const result = await syncIssues({ full: req.query.full === 'true' });
     await pollActiveRuns();
+    await pollOpenPullRequests();
     publishBoard();
     res.json(result);
   } catch (error) {
@@ -103,6 +105,15 @@ boardRouter.post('/sync', async (req, res) => {
 
 boardRouter.delete('/notifications', (_req, res) => {
   clearNotifications();
+  publishBoard();
+  res.status(204).end();
+});
+
+boardRouter.delete('/notifications/:id', (req, res) => {
+  if (!deleteNotification(req.params.id)) {
+    res.status(404).json({ error: 'Notification not found' });
+    return;
+  }
   publishBoard();
   res.status(204).end();
 });

@@ -1,9 +1,9 @@
-import { PHASE_LABELS, RUN_STATUS_LABELS, isRunActive } from '@shared/board';
+import { isRunWorking } from '@shared/board';
 import type { CardDto } from '@shared/types';
 import { ExternalLink, GitPullRequest, Play, RotateCcw, Sparkles, Square } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PHASE_TONES, RUN_STATUS_TONES } from '@/lib/phase';
+import { PHASE_TONES, statusPill } from '@/lib/phase';
 import { cn, formatRelative } from '@/lib/utils';
 import { CheckList } from './CheckList';
 import { PhaseProgress } from './PhaseProgress';
@@ -17,6 +17,8 @@ export interface IssueCardProps {
   onStop: (issueNumber: number) => void;
   onReset: (issueNumber: number) => void;
   onOpen: (card: CardDto) => void;
+  /** Set when the card sits in a column that already names its phase, so the pill can stay quiet. */
+  inPhaseColumn?: boolean;
 }
 
 export function IssueCard({
@@ -28,10 +30,14 @@ export function IssueCard({
   onStop,
   onReset,
   onOpen,
+  inPhaseColumn = false,
 }: IssueCardProps) {
   const { issue, run, pullRequest, phase } = card;
-  const active = run ? isRunActive(run.status) : false;
-  const awaitingReview = phase === 'review' && pullRequest?.state === 'open' && !pullRequest.merged;
+  const working = run ? isRunWorking(run.status) : false;
+  const awaitingReview = pullRequest?.state === 'open' && !pullRequest.merged;
+  const pill = statusPill(card);
+  const tone = pill?.tone ?? PHASE_TONES[phase];
+  const visiblePill = pill && (!pill.restatesColumn || !inPhaseColumn) ? pill : null;
   /** The last moment something actually happened, rather than the last poll. */
   const lastActivityAt = run ? (run.finishedAt ?? run.updatedAt) : issue.updatedAt;
 
@@ -39,19 +45,17 @@ export function IssueCard({
     <article
       className={cn(
         'group cursor-pointer rounded-lg border bg-surface-raised p-3 transition-colors',
-        awaitingReview
-          ? 'border-info/60 ring-1 ring-info/30 hover:border-info'
-          : run && !active && run.status !== 'finished'
-            ? 'border-danger/50 hover:border-danger'
+        pill?.tone === 'danger'
+          ? 'border-danger/50 hover:border-danger'
+          : awaitingReview
+            ? 'border-attention/50 hover:border-attention'
             : 'border-line hover:border-line-strong',
       )}
       onClick={() => onOpen(card)}
     >
       <div className="flex items-start justify-between gap-2">
         <span className="font-mono text-[11px] text-faint">#{issue.number}</span>
-        <Badge tone={awaitingReview ? 'info' : PHASE_TONES[phase]}>
-          {awaitingReview ? 'Your review needed' : PHASE_LABELS[phase]}
-        </Badge>
+        {visiblePill ? <Badge tone={visiblePill.tone}>{visiblePill.label}</Badge> : null}
       </div>
 
       <h3 className="mt-1.5 line-clamp-2 text-sm font-medium text-text">{issue.title}</h3>
@@ -68,12 +72,9 @@ export function IssueCard({
 
       {run ? (
         <div className="mt-3 space-y-2">
-          <PhaseProgress phase={phase} needsAttention={card.needsAttention} />
+          <PhaseProgress phase={phase} tone={tone} working={working} />
           <div className="flex items-center justify-between gap-2 text-[11px] text-faint">
-            <span className="flex items-center gap-1.5">
-              <Badge tone={RUN_STATUS_TONES[run.status]}>{RUN_STATUS_LABELS[run.status]}</Badge>
-              {run.acus > 0 ? `${run.acus.toFixed(1)} ACU` : null}
-            </span>
+            <span>{run.acus > 0 ? `${run.acus.toFixed(1)} ACU` : null}</span>
             <span>{formatRelative(lastActivityAt)}</span>
           </div>
         </div>
@@ -87,7 +88,7 @@ export function IssueCard({
             rel="noreferrer"
             className={cn(
               'inline-flex items-center gap-1.5 text-xs hover:underline',
-              awaitingReview ? 'font-medium text-info' : 'text-muted',
+              awaitingReview ? 'font-medium text-attention' : 'text-muted',
             )}
             onClick={(event) => event.stopPropagation()}
           >
@@ -116,7 +117,7 @@ export function IssueCard({
                 <Sparkles size={13} />Devin session
               </a>
             ) : null}
-            {active ? (
+            {working ? (
               <Button
                 variant="ghost"
                 size="sm"

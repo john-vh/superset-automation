@@ -75,12 +75,19 @@ describe('resolvePhase', () => {
     expect(resolvePhase(issue, { ...run, status: 'finished' }, null)).toBe('attention');
   });
 
-  it('is done once the pull request merges', () => {
-    expect(resolvePhase(issue, run, { ...pr, merged: true, state: 'closed' })).toBe('done');
+  it('is merged only once the pull request actually merges', () => {
+    expect(resolvePhase(issue, run, { ...pr, merged: true, state: 'closed' })).toBe('merged');
   });
 
-  it('keeps an open pull request in review even when the run says it is done', () => {
-    expect(resolvePhase(issue, { ...run, phase: 'done', status: 'finished' }, pr)).toBe('review');
+  it('keeps an open pull request in review after the session ends', () => {
+    expect(resolvePhase(issue, { ...run, status: 'finished' }, pr)).toBe('review');
+    expect(resolvePhase(issue, { ...run, status: 'stopped' }, pr)).toBe('review');
+    expect(resolvePhase({ ...issue, state: 'closed' }, { ...run, status: 'finished' }, pr)).toBe('review');
+  });
+
+  it('marks an issue closed without a pull request as closed, not merged', () => {
+    expect(resolvePhase({ ...issue, state: 'closed' }, null, null)).toBe('closed');
+    expect(resolvePhase({ ...issue, state: 'closed' }, { ...run, status: 'finished' }, null)).toBe('closed');
   });
 
   it('flags a stopped run for attention', () => {

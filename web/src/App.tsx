@@ -100,7 +100,7 @@ export function App() {
   const integrations = board?.integrations;
 
   return (
-    <div className="min-h-full px-5 py-4">
+    <div className="flex h-screen flex-col overflow-hidden px-5 py-4">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-base font-semibold text-text">Superset Automation</h1>
@@ -111,7 +111,7 @@ export function App() {
         </div>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-[11px] text-muted">
-            <span className={cn('h-1.5 w-1.5 rounded-full', connected ? 'bg-success' : 'bg-danger')} />
+            <span className={cn('h-1.5 w-1.5 rounded-full', connected ? 'bg-active' : 'bg-danger')} />
             {connected ? 'live' : 'reconnecting'}
           </span>
           <Button
@@ -129,18 +129,20 @@ export function App() {
           </Button>
           <NotificationFeed
             notifications={board?.notifications ?? []}
+            cards={board?.cards ?? []}
             onClear={() => void api.clearNotifications().then(refresh)}
+            onDismiss={(id) => void api.dismissNotification(id).then(refresh)}
           />
         </div>
       </header>
 
       {integrations && !integrations.devinConfigured ? (
-        <p className="mb-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+        <p className="mb-3 rounded-md border border-attention/40 bg-attention/10 px-3 py-2 text-xs text-attention">
           Devin is not configured — set DEVIN_API_KEY and DEVIN_ORG_ID in .env to dispatch sessions.
         </p>
       ) : null}
       {integrations && !integrations.githubTokenConfigured ? (
-        <p className="mb-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+        <p className="mb-3 rounded-md border border-attention/40 bg-attention/10 px-3 py-2 text-xs text-attention">
           GITHUB_TOKEN is not set — issue sync and CI check tracking are disabled.
         </p>
       ) : null}
@@ -151,7 +153,7 @@ export function App() {
       ) : null}
 
       {board ? (
-        <div className="space-y-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
           <MetricsHeader metrics={board.metrics} />
           <Board
             cards={board.cards}

@@ -36,7 +36,7 @@ export function buildPrompt({ issue, runId }: PromptContext): string {
     `  -d '{"run_id":"${runId}","phase":"investigating","message":"short status"}'`,
     '```',
     '',
-    'Valid phases in order: investigating, implementing, validating, review, done.',
+    'Valid phases in order: investigating, implementing, validating, review.',
     'Send "review" immediately after the PR is opened, including the PR number as "pr_number".',
     'If you become blocked, send phase "attention" with an explanation in "message".',
   ]

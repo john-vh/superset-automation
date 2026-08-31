@@ -22,17 +22,17 @@ export function hasFailingCheck(pr: PullRequestDto | null): boolean {
 }
 
 /**
- * A card is only `done` once the pull request is merged (or the issue itself was closed) — a
- * session reporting `done` while its PR is still open stays in `review`, where the user acts.
+ * `merged` means the pull request was actually merged — nothing else earns it. An open pull
+ * request always resolves to `review` (the user owns the next action) no matter what the session
+ * reported or whether the session has since ended.
  */
 export function resolvePhase(issue: IssueDto, run: RunDto | null, pr: PullRequestDto | null): Phase {
-  if (pr?.merged) return 'done';
-  if (!run) return issue.state === 'closed' ? 'done' : 'backlog';
+  if (pr?.merged) return 'merged';
   if (hasFailingCheck(pr)) return 'attention';
-  if (pr && pr.state === 'open') return 'review';
+  if (pr?.state === 'open') return 'review';
+  if (!run) return issue.state === 'closed' ? 'closed' : 'backlog';
   if (run.status === 'failed' || run.status === 'blocked' || run.status === 'stopped') return 'attention';
-  if (run.status === 'finished') return pr ? 'review' : 'attention';
-  if (run.phase === 'done') return 'review';
+  if (run.status === 'finished') return issue.state === 'closed' ? 'closed' : 'attention';
   return run.phase;
 }
 

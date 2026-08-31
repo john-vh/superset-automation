@@ -30,6 +30,10 @@ export function listNotifications(limit = 30): NotificationDto[] {
   return rows.map(toNotificationDto);
 }
 
+export function deleteNotification(id: string): boolean {
+  return db().prepare('DELETE FROM notifications WHERE id = ?').run(id).changes > 0;
+}
+
 export function clearNotifications(): void {
   db().prepare('DELETE FROM notifications').run();
 }
