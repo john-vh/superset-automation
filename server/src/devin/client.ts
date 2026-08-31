@@ -118,6 +118,15 @@ export async function getSession(sessionId: string): Promise<DevinSessionDetail>
   };
 }
 
+/**
+ * The session payload's `acus_consumed` can trail the work by a while, so the consumption API is
+ * the more reliable total. It is enterprise-scoped, so callers must tolerate a 401/403/404.
+ */
+export async function getSessionAcus(sessionId: string): Promise<number | null> {
+  const raw = await request<Record<string, unknown>>(`/v3/enterprise/consumption/daily/sessions/${sessionId}`);
+  return typeof raw.total_acus === 'number' ? raw.total_acus : null;
+}
+
 export function pullRequestUrl(ref: DevinPullRequestRef | undefined): string | null {
   return ref?.url ?? ref?.pr_url ?? null;
 }

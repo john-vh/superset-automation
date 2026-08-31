@@ -45,6 +45,13 @@ export function listActiveRuns(): RunDto[] {
   return rows.map(toRunDto);
 }
 
+export function sumRunAcusForIssue(issueNumber: number): number {
+  const row = db()
+    .prepare('SELECT COALESCE(SUM(acus), 0) AS total FROM runs WHERE issue_number = ?')
+    .get(issueNumber) as { total: number };
+  return row.total;
+}
+
 /** Drops every run and event for an issue so the card falls back to the backlog. */
 export function deleteRunsForIssue(issueNumber: number): number {
   const result = db().prepare('DELETE FROM runs WHERE issue_number = ?').run(issueNumber);

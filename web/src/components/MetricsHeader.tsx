@@ -28,7 +28,7 @@ export function MetricsHeader({ metrics }: MetricsHeaderProps) {
     },
     { label: 'Session success', value: formatPercent(metrics.successRate) },
     { label: 'Median time to PR', value: formatDuration(metrics.medianTimeToPrMs) },
-    { label: 'ACUs used', value: String(metrics.acusConsumed), hint: ACU_HELP },
+    { label: 'ACUs used', value: metrics.acusConsumed.toFixed(2), hint: ACU_HELP },
     {
       label: 'Estimated spend',
       value: formatUsd(metrics.estimatedCostUsd),
