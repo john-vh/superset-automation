@@ -14,6 +14,24 @@ export function setMeta(key: string, value: string): void {
     .run(key, value);
 }
 
+const RESET_KEY_PREFIX = 'issue_reset:';
+
+/**
+ * A reset issue is treated as never dispatched, so its card returns to the backlog even when the
+ * issue itself is closed on GitHub. Dispatching clears the marker.
+ */
+export function markIssueReset(issueNumber: number, at: string): void {
+  setMeta(`${RESET_KEY_PREFIX}${issueNumber}`, at);
+}
+
+export function clearIssueReset(issueNumber: number): void {
+  db().prepare('DELETE FROM meta WHERE key = ?').run(`${RESET_KEY_PREFIX}${issueNumber}`);
+}
+
+export function isIssueReset(issueNumber: number): boolean {
+  return getMeta(`${RESET_KEY_PREFIX}${issueNumber}`) !== null;
+}
+
 /** Returns false when the delivery was already processed. */
 export function recordDelivery(deliveryId: string, receivedAt: string): boolean {
   const result = db()

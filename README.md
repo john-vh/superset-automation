@@ -102,8 +102,11 @@ browser over SSE.
 
 When the session opens a PR the card turns amber and reads **Awaiting review** — that is your cue.
 Review it in GitHub as you normally would; the board keeps watching the PR after the session ends,
-so it turns green only when the PR is actually merged. An issue closed without a PR reads
-`Closed without a PR` instead.
+so it turns green and lands in **Merged** only when the PR is actually merged. An issue closed
+without a merged PR lands in the separate **Closed** column instead.
+
+**Reset** clears an issue's local run history and detaches its tracked PR (the PR itself is left on
+GitHub), returning the card to Backlog from any column so it can be dispatched again.
 
 ## Troubleshooting
 

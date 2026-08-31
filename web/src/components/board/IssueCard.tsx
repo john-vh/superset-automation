@@ -35,6 +35,7 @@ export function IssueCard({
   const { issue, run, pullRequest, phase } = card;
   const working = run ? isRunWorking(run.status) : false;
   const awaitingReview = pullRequest?.state === 'open' && !pullRequest.merged;
+  const merged = Boolean(pullRequest?.merged);
   const pill = statusPill(card);
   const tone = pill?.tone ?? PHASE_TONES[phase];
   const visiblePill = pill && (!pill.restatesColumn || !inPhaseColumn) ? pill : null;
@@ -49,7 +50,9 @@ export function IssueCard({
           ? 'border-danger/50 hover:border-danger'
           : awaitingReview
             ? 'border-attention/50 hover:border-attention'
-            : 'border-line hover:border-line-strong',
+            : merged
+              ? 'border-success/50 hover:border-success'
+              : 'border-line hover:border-line-strong',
       )}
       onClick={() => onOpen(card)}
     >
@@ -88,12 +91,16 @@ export function IssueCard({
             rel="noreferrer"
             className={cn(
               'inline-flex items-center gap-1.5 text-xs hover:underline',
-              awaitingReview ? 'font-medium text-attention' : 'text-muted',
+              awaitingReview ? 'font-medium text-attention' : merged ? 'font-medium text-success' : 'text-muted',
             )}
             onClick={(event) => event.stopPropagation()}
           >
             <GitPullRequest size={13} />
-            {awaitingReview ? `Review & merge PR #${pullRequest.number}` : `PR #${pullRequest.number}`}
+            {awaitingReview
+              ? `Review & merge PR #${pullRequest.number}`
+              : merged
+                ? `Merged PR #${pullRequest.number}`
+                : `PR #${pullRequest.number}`}
             <ExternalLink size={11} />
           </a>
           <CheckList checks={pullRequest.checks} limit={3} />
@@ -131,22 +138,35 @@ export function IssueCard({
                 <Square size={12} />
                 {busy ? 'Stopping…' : 'Stop'}
               </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                title="Clear session history and return the issue to the backlog"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onReset(issue.number);
-                }}
-              >
-                <RotateCcw size={12} />
-                {busy ? 'Resetting…' : 'Reset'}
-              </Button>
-            )}
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              title="Clear session history and return the issue to the backlog"
+              onClick={(event) => {
+                event.stopPropagation();
+                onReset(issue.number);
+              }}
+            >
+              <RotateCcw size={12} />
+              {busy ? 'Resetting…' : 'Reset'}
+            </Button>
           </>
+        ) : pullRequest ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            title="Stop tracking this pull request and return the issue to the backlog"
+            onClick={(event) => {
+              event.stopPropagation();
+              onReset(issue.number);
+            }}
+          >
+            <RotateCcw size={12} />
+            {busy ? 'Resetting…' : 'Reset'}
+          </Button>
         ) : (
           <Button
             variant="primary"

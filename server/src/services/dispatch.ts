@@ -5,6 +5,7 @@ import { buildPrompt } from '../devin/prompt.js';
 import { publishBoard, publishNotification } from '../events/bus.js';
 import { getIssue } from '../store/issues.js';
 import { deletePullRequestsForIssue } from '../store/pullRequests.js';
+import { clearIssueReset, markIssueReset } from '../store/meta.js';
 import { addRunEvent, createRun, deleteRunsForIssue, getLatestRunForIssue, updateRun } from '../store/runs.js';
 import { nowIso } from '../db/index.js';
 import { isRunActive } from '../../../shared/board.js';
@@ -70,8 +71,9 @@ export async function resetIssue(issueNumber: number): Promise<void> {
     }
   }
 
-  deleteRunsForIssue(issueNumber);
   deletePullRequestsForIssue(issueNumber);
+  deleteRunsForIssue(issueNumber);
+  markIssueReset(issueNumber, nowIso());
 
   publishNotification({
     level: 'info',
@@ -96,6 +98,7 @@ export async function dispatchIssue(issueNumber: number): Promise<RunDto> {
     throw new DispatchError(`Issue #${issueNumber} already has an active Devin session`, 409);
   }
 
+  clearIssueReset(issueNumber);
   const run = createRun(issueNumber);
   addRunEvent({
     runId: run.id,

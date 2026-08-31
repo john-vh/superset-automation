@@ -91,6 +91,10 @@ export function statusPill(card: CardDto): StatusPill | null {
   if (run && isRunWorking(run.status)) {
     return { label: LIVE_PHASE_LABELS[phase] ?? 'Working', tone: 'active', restatesColumn: true };
   }
+  // A reset card goes back to the backlog even when GitHub has closed the issue behind it.
+  if (phase === 'backlog' && card.issue.state === 'closed') {
+    return { label: 'Closed on GitHub', tone: 'neutral', restatesColumn: false };
+  }
   return null;
 }
 

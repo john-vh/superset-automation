@@ -58,16 +58,34 @@ export function getPullRequest(number: number): PullRequestDto | null {
   return row ? toPullRequestDto(row, listChecks(row.number)) : null;
 }
 
+/**
+ * Matches on the run as well as the issue link, so a pull request whose body never named the
+ * issue — the link GitHub's closing keywords give us — still reaches its card.
+ */
 export function getPullRequestForIssue(issueNumber: number): PullRequestDto | null {
   const row = db()
-    .prepare('SELECT * FROM pull_requests WHERE issue_number = ? ORDER BY number DESC LIMIT 1')
-    .get(issueNumber) as PullRequestRow | undefined;
+    .prepare(
+      `SELECT pr.* FROM pull_requests pr
+         LEFT JOIN runs r ON r.id = pr.run_id
+        WHERE pr.issue_number = @issue OR r.issue_number = @issue
+        ORDER BY pr.number DESC LIMIT 1`,
+    )
+    .get({ issue: issueNumber }) as PullRequestRow | undefined;
   return row ? toPullRequestDto(row, listChecks(row.number)) : null;
 }
 
-/** Detaches tracked pull requests from an issue; the PRs themselves are left on GitHub. */
+/**
+ * Detaches tracked pull requests from an issue; the PRs themselves are left on GitHub. Rows are
+ * matched through the issue's runs too, so a PR that was never linked back to the issue still goes.
+ */
 export function deletePullRequestsForIssue(issueNumber: number): number {
-  const result = db().prepare('DELETE FROM pull_requests WHERE issue_number = ?').run(issueNumber);
+  const result = db()
+    .prepare(
+      `DELETE FROM pull_requests
+        WHERE issue_number = @issue
+           OR run_id IN (SELECT id FROM runs WHERE issue_number = @issue)`,
+    )
+    .run({ issue: issueNumber });
   return result.changes;
 }
 
