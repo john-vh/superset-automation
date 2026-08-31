@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.1.0",
-  "description": "Kanban automation board that routes Apache Superset issues to Devin",
+  "description": "Issue Automation Pipeline — kanban board that routes Apache Superset issues to Devin",
   "workspaces": [
     "server",
     "web"
