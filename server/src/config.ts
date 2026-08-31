@@ -13,7 +13,11 @@ for (const candidate of [path.join(repoRoot, '.env'), path.join(serverDir, '.env
 
 const schema = z.object({
   PORT: z.coerce.number().default(8787),
-  DATABASE_PATH: z.string().default(path.join(repoRoot, 'data', 'board.sqlite')),
+  // Relative paths are anchored to the repo root, not the server workspace the process runs in.
+  DATABASE_PATH: z
+    .string()
+    .default(path.join(repoRoot, 'data', 'board.sqlite'))
+    .transform((value) => path.resolve(repoRoot, value)),
 
   GITHUB_REPO: z.string().default('john-vh/superset'),
   GITHUB_TOKEN: z.string().optional(),
