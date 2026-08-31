@@ -38,6 +38,13 @@ const schema = z.object({
 
   ISSUE_SYNC_INTERVAL_MS: z.coerce.number().default(60_000),
   SESSION_POLL_INTERVAL_MS: z.coerce.number().default(10_000),
+
+  /** Serve the built frontend from the API so the whole app lives on one port (the Docker image). */
+  SERVE_WEB: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  WEB_DIST: z.string().default(path.join(repoRoot, 'web', 'dist')),
 });
 
 const parsed = schema.safeParse(process.env);

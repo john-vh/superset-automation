@@ -1,84 +1,139 @@
 # Issue Automation Pipeline
 
-Kanban automation board that ingests issues from [`john-vh/superset`](https://github.com/john-vh/superset),
-dispatches them to Devin, and tracks each session through to a pull request and its GitHub Actions checks.
+Kanban automation board that ingests GitHub issues from a copy of [Apache Superset](https://github.com/apache/superset),
+dispatches them to Devin (one session per issue), and tracks each session through to a pull request
+and its GitHub Actions checks.
 
-Runs entirely on your machine: a Vite + React frontend, an Express API, and a SQLite file.
+It runs on your machine — one Docker container serving a React UI, an Express API and a SQLite file
+on port 8787 — and it drives the real thing: real issues, real Devin sessions, real PRs. There is no
+demo or simulation mode, so the setup below is all required.
 
-## Layout
+## What you need
 
-```
-shared/   DTOs and board column definitions shared by both sides
-server/   Express API, SQLite store, GitHub + Devin integrations, background workers
-web/      React UI (kanban board, metrics, activity feed, run drawer)
-```
+- Docker (with Compose v2) and a terminal.
+- **Your own copy of Superset** on GitHub, with issues in it (see step 1).
+- A **GitHub token** for that copy, and admin rights on it to add a webhook.
+- A **Devin account**: API key + organization id.
+- A **tunnel** (e.g. `cloudflared`), because GitHub webhooks and Devin callbacks have to reach your
+  laptop. The compose file can run one for you.
 
 ## Setup
 
+### 1. Get a repository with issues in it
+
+Fork or copy Superset (or the copy you were pointed at) into your own account. **Forks do not copy
+issues**, so the fork starts empty — open a few issues in your copy by hand before continuing;
+dependency advisories work well ("Bump Flask to fix CVE-…", "DoS in `brace-expansion`"). Whatever
+you open here is what shows up in the board's Backlog column.
+
+Devin's GitHub integration needs write access to this repository so it can push branches and open
+pull requests — connect it at app.devin.ai → Settings → GitHub.
+
+### 2. Copy the playbook into your Devin org
+
+Playbooks are org-scoped, so there is no id to hand out. Paste the body of
+[`docs/playbook.md`](docs/playbook.md) into app.devin.ai → Settings → Playbooks, and keep the
+`playbook-…` id it gives you.
+
+### 3. Fill in `.env`
+
 ```bash
-nvm use            # Node 22 (see .nvmrc)
-npm install
+git clone https://github.com/john-vh/superset-automation && cd superset-automation
 cp .env.example .env
-npm run dev        # API on :8787, UI on http://localhost:5173
 ```
 
-The UI proxies `/api` to the server, so only the Vite URL needs to be open in a browser.
-Without credentials the app still boots — the board renders and warns which integrations are inactive.
+The values that matter:
 
-## Configuration
+```env
+GITHUB_REPO=<your-account>/<your-superset-copy>
+GITHUB_TOKEN=<fine-grained PAT on that repo — read Issues, Pull requests, Contents, Checks, Metadata>
+GITHUB_WEBHOOK_SECRET=<any random string; you reuse it in step 5>
+DEVIN_API_KEY=<from app.devin.ai settings>
+DEVIN_ORG_ID=<your Devin org id>
+DEVIN_PLAYBOOK_ID=playbook-<from step 2>
+CALLBACK_TOKEN=<any random string>
+APP_BASE_URL=<filled in during step 4>
+```
 
-All settings live in `.env` (never commit it). See `.env.example` for the full list.
+The GitHub token is only ever read from — Devin opens the PRs through its own integration.
 
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_PATH` | SQLite file, resolved against the repo root. Defaults to `data/board.sqlite`. |
-| `GITHUB_REPO` | Repository to watch, `owner/name`. Defaults to `john-vh/superset`. |
-| `GITHUB_TOKEN` | PAT with `repo` scope. Required for issue sync and check-run lookups. |
-| `GITHUB_WEBHOOK_SECRET` | Shared secret used to verify webhook signatures. |
-| `DEVIN_API_KEY`, `DEVIN_ORG_ID` | Required to dispatch and poll Devin sessions. |
-| `DEVIN_PLAYBOOK_ID` | Playbook applied to every dispatched session. |
-| `DEVIN_MAX_ACU` | Per-session ACU ceiling. |
-| `APP_BASE_URL` | Public URL sessions post phase callbacks to (a tunnel when running locally). |
-| `CALLBACK_TOKEN` | Shared secret sessions send as `X-Callback-Token`. |
-| `ACU_RATE_USD` | Price of one ACU (default `2.25`), used for the estimated spend metric. |
+### 4. Start it, with a tunnel
 
-## Ingestion
+```bash
+docker compose --profile tunnel up -d --build
+docker compose logs tunnel | grep trycloudflare      # e.g. https://foo-bar-baz.trycloudflare.com
+```
 
-Issues arrive two ways, so the board is correct even if the app was offline:
+Put that hostname in `.env` as `APP_BASE_URL`, then recreate the app so it picks it up:
 
-1. **Webhook** — point a GitHub webhook at `POST /api/webhooks/github` (content type `application/json`,
-   secret = `GITHUB_WEBHOOK_SECRET`, events: *Issues*, *Pull requests*, *Check runs*). Signatures are verified
-   with a timing-safe HMAC compare and deliveries are de-duplicated by `X-GitHub-Delivery`.
-2. **Reconciliation poll** — every `ISSUE_SYNC_INTERVAL_MS` the server pulls issues updated since the last sync.
-   "Sync issues" in the UI runs the same pass on demand.
+```bash
+docker compose up -d app
+```
 
-Locally, expose the server with a tunnel (e.g. `cloudflared tunnel --url http://localhost:8787`) and use that
-hostname for both the webhook and `APP_BASE_URL`.
+The board is now on <http://localhost:8787> (UI, API, webhook and callbacks all share that port), and
+`curl localhost:8787/healthz` returns `{"status":"ok"}`.
 
-## Lifecycle
+Already running your own `cloudflared` on the host? Skip `--profile tunnel`, run
+`docker compose up -d --build`, and point it at `http://localhost:8787` as usual.
 
-Clicking **Send to Devin** on a backlog card (or **Start backlog** for all of them) creates one independent
-Devin session per issue; an issue can only have one active run at a time. Each card then moves through:
+### 5. Point a webhook at the tunnel
+
+In your Superset copy → Settings → Webhooks → Add webhook:
+
+- **Payload URL**: `https://<tunnel-host>/api/webhooks/github`
+- **Content type**: `application/json`
+- **Secret**: the `GITHUB_WEBHOOK_SECRET` from step 3
+- **Events**: *Let me select individual events* → **Issues**, **Pull requests**, **Check runs** only
+
+Deliveries are HMAC-verified and de-duplicated by `X-GitHub-Delivery`. Your issues should now appear
+in Backlog; "Sync issues" in the header forces a reconciliation pass if you want them immediately.
+
+### 6. Dispatch a real issue
+
+Click **Send to Devin** on a backlog card (or **Start backlog** for all of them). That creates one
+Devin session per issue — an issue can only have one active run — and the card walks the board:
 
 `Backlog → Queued → Investigating → Implementing → Validating → Awaiting your review → Merged`
 
-with `Needs attention` for failed or blocked sessions and failing CI. An open pull request always reads as
-awaiting review — only an actually merged PR reaches `Merged`, and an issue closed without one shows as
-`Closed without a PR`. Phase changes come from two sources:
+with `Needs attention` for blocked, failed or stopped runs and for failing CI. Phase changes arrive
+both from the session's own callbacks (`POST /api/devin/callback`, which the playbook instructs it to
+send) and from polling, so the board stays correct even if the tunnel drops. Updates stream to the
+browser over SSE.
 
-- **Callbacks** — the session posts `{ run_id, phase, message, pr_number? }` to `POST /api/devin/callback`
-  with the `X-Callback-Token` header. This is what the playbook instructs it to do.
-- **Polling** — every `SESSION_POLL_INTERVAL_MS` the server reads session status, new messages, ACU usage and
-  any pull requests, inferring a phase from message text when no callback arrived.
+When the session opens a PR the card turns amber and reads **Awaiting review** — that is your cue.
+Review it in GitHub as you normally would; the board keeps watching the PR after the session ends,
+so it turns green only when the PR is actually merged. An issue closed without a PR reads
+`Closed without a PR` instead.
 
-The board streams to the browser over SSE (`GET /api/stream`), so cards move without a refresh.
+## Troubleshooting
 
-## Devin playbook
+| Symptom | Cause |
+| --- | --- |
+| Board is empty | `GITHUB_TOKEN`/`GITHUB_REPO` wrong, or your copy genuinely has no issues. Check `docker compose logs app`. |
+| Cards never leave Queued | Callbacks can't reach you: `APP_BASE_URL` isn't the tunnel hostname, or the tunnel restarted with a new one. |
+| Webhook deliveries show 401 | `GITHUB_WEBHOOK_SECRET` differs from the secret on the webhook. |
+| Dispatch button is disabled | `DEVIN_API_KEY`/`DEVIN_ORG_ID` missing — the header shows which integrations are inactive. |
+| A card is stuck after you stopped a session | **Reset** on the card clears its local run state (the GitHub PR is untouched). |
+| Want a clean slate | `docker compose down -v` drops the SQLite volume. |
 
-Create a playbook in your Devin org containing the issue-fix procedure (implement a focused fix, open a PR whose
-body says `Fixes #<issue>`, run tests/lint/typecheck, and POST each phase change to the callback URL), then set
-`DEVIN_PLAYBOOK_ID`. The dispatch prompt in `server/src/devin/prompt.ts` repeats the callback contract, so
-dispatch still works without a playbook.
+## Configuration
+
+Everything lives in `.env` (never commit it); see `.env.example` for the full list.
+
+| Variable | Purpose |
+| --- | --- |
+| `GITHUB_REPO` | Repository to watch, `owner/name`. |
+| `GITHUB_TOKEN` | Read-only PAT for issue sync, PR and check-run lookups. |
+| `GITHUB_WEBHOOK_SECRET` | Shared secret used to verify webhook signatures. |
+| `DEVIN_API_KEY`, `DEVIN_ORG_ID` | Required to dispatch and poll Devin sessions. |
+| `DEVIN_PLAYBOOK_ID` | Playbook applied to every dispatched session. Optional — `server/src/devin/prompt.ts` inlines the same contract. |
+| `DEVIN_MAX_ACU` | Per-session ACU ceiling. |
+| `APP_BASE_URL` | Public URL sessions post phase callbacks to (your tunnel). |
+| `CALLBACK_TOKEN` | Shared secret sessions send as `X-Callback-Token`. |
+| `ACU_RATE_USD` | Price of one ACU (default `2.25`), used for the estimated spend metric. |
+| `DATABASE_PATH` | SQLite file, resolved against the repo root. Compose pins it to `/data/board.sqlite`. |
+| `SERVE_WEB`, `WEB_DIST` | Serve the built UI from the API. Set by the image; leave alone outside Docker. |
+| `ISSUE_SYNC_INTERVAL_MS`, `SESSION_POLL_INTERVAL_MS` | Reconciliation and session poll intervals. |
 
 ## API
 
@@ -96,13 +151,19 @@ dispatch still works without a playbook.
 | `POST` | `/api/webhooks/github` | GitHub webhook receiver |
 | `POST` | `/api/devin/callback` | Session phase callback |
 
-## Commands
+## Developing without Docker
+
+```
+shared/   DTOs and board column definitions shared by both sides
+server/   Express API, SQLite store, GitHub + Devin integrations, background workers
+web/      React UI (kanban board, metrics, activity feed, run drawer)
+```
 
 ```bash
-npm run dev         # server + UI
-npm run lint
-npm run typecheck
-npm run test        # server + web unit tests (vitest)
-npm run build
-npm start           # serve the built API
+nvm use            # Node 22 (see .nvmrc)
+npm install
+npm run dev        # API on :8787, UI on http://localhost:5173 (proxies /api)
+npm run lint && npm run typecheck && npm run test && npm run build
 ```
+
+Same `.env`; the split ports mean you browse 5173 but still tunnel 8787.
