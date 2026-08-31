@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    image: issue-automation-pipeline
+    ports:
+      - '8787:8787'
+    env_file:
+      - .env
+    environment:
+      # The volume below is the only writable path in the image, so it wins over any
+      # host-oriented DATABASE_PATH left in .env.
+      DATABASE_PATH: /data/board.sqlite
+    volumes:
+      # The SQLite board state lives here, so it survives `docker compose down`.
+      - board-data:/data
+    restart: unless-stopped
+
+  # Optional: `docker compose --profile tunnel up` publishes the API for GitHub webhooks
+  # and Devin callbacks. Inside the compose network the target is the service name, not
+  # localhost — localhost here would be the cloudflared container itself.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: [tunnel]
+    command: tunnel --no-autoupdate --url http://app:8787
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  board-data:
