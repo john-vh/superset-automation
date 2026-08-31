@@ -31,6 +31,7 @@ All settings live in `.env` (never commit it). See `.env.example` for the full l
 
 | Variable | Purpose |
 | --- | --- |
+| `DATABASE_PATH` | SQLite file, resolved against the repo root. Defaults to `data/board.sqlite`. |
 | `GITHUB_REPO` | Repository to watch, `owner/name`. Defaults to `john-vh/superset`. |
 | `GITHUB_TOKEN` | PAT with `repo` scope. Required for issue sync and check-run lookups. |
 | `GITHUB_WEBHOOK_SECRET` | Shared secret used to verify webhook signatures. |
@@ -59,9 +60,11 @@ hostname for both the webhook and `APP_BASE_URL`.
 Clicking **Send to Devin** on a backlog card (or **Start backlog** for all of them) creates one independent
 Devin session per issue; an issue can only have one active run at a time. Each card then moves through:
 
-`Backlog → Queued → Investigating → Implementing → Validating → In review → Done`
+`Backlog → Queued → Investigating → Implementing → Validating → Awaiting your review → Merged`
 
-with `Needs attention` for failed or blocked sessions and failing CI. Phase changes come from two sources:
+with `Needs attention` for failed or blocked sessions and failing CI. An open pull request always reads as
+awaiting review — only an actually merged PR reaches `Merged`, and an issue closed without one shows as
+`Closed without a PR`. Phase changes come from two sources:
 
 - **Callbacks** — the session posts `{ run_id, phase, message, pr_number? }` to `POST /api/devin/callback`
   with the `X-Callback-Token` header. This is what the playbook instructs it to do.
@@ -87,6 +90,9 @@ dispatch still works without a playbook.
 | `POST` | `/api/issues/:number/dispatch` | Start a Devin session for an issue |
 | `POST` | `/api/sync` | Run issue reconciliation now |
 | `DELETE` | `/api/notifications` | Clear the activity feed |
+| `DELETE` | `/api/notifications/:id` | Dismiss one activity |
+| `POST` | `/api/issues/:number/stop` | Stop the active Devin session |
+| `POST` | `/api/issues/:number/reset` | Clear an issue's local run state |
 | `POST` | `/api/webhooks/github` | GitHub webhook receiver |
 | `POST` | `/api/devin/callback` | Session phase callback |
 
@@ -96,7 +102,7 @@ dispatch still works without a playbook.
 npm run dev         # server + UI
 npm run lint
 npm run typecheck
-npm run test        # server unit tests (vitest)
+npm run test        # server + web unit tests (vitest)
 npm run build
 npm start           # serve the built API
 ```
