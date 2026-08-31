@@ -4,7 +4,9 @@ import { CALLBACK_PHASES, normalizePhase } from '../../../shared/board.js';
 import type { Phase } from '../../../shared/types.js';
 import { config } from '../config.js';
 import { publishBoard, publishNotification } from '../events/bus.js';
+import { reportedPhase } from '../services/board.js';
 import { trackPullRequest } from '../services/prTracking.js';
+import { getPullRequestForIssue } from '../store/pullRequests.js';
 import { addRunEvent, getRun, getRunBySession, updateRun } from '../store/runs.js';
 
 export const devinCallbackRouter: Router = Router();
@@ -45,12 +47,16 @@ devinCallbackRouter.post('/callback', async (req, res) => {
     return;
   }
 
-  if (prNumber) await trackPullRequest({ number: prNumber, issueNumber: run.issueNumber, runId: run.id });
+  const pr = prNumber
+    ? await trackPullRequest({ number: prNumber, issueNumber: run.issueNumber, runId: run.id })
+    : getPullRequestForIssue(run.issueNumber);
 
-  updateRun(run.id, { phase, status: phase === 'attention' ? 'blocked' : run.status });
-  addRunEvent({ runId: run.id, kind: 'phase', phase, source: 'devin', message });
+  const reported: Phase = reportedPhase(phase, pr);
 
-  if (phase === 'attention') {
+  updateRun(run.id, { phase: reported, status: reported === 'attention' ? 'blocked' : run.status });
+  addRunEvent({ runId: run.id, kind: 'phase', phase: reported, source: 'devin', message });
+
+  if (reported === 'attention') {
     publishNotification({
       level: 'warning',
       title: `Devin is blocked on #${run.issueNumber}`,
@@ -61,5 +67,5 @@ devinCallbackRouter.post('/callback', async (req, res) => {
     publishBoard();
   }
 
-  res.json({ status: 'ok', phase });
+  res.json({ status: 'ok', phase: reported });
 });
