@@ -127,6 +127,19 @@ describe('board aggregation', () => {
     expect(metrics.estimatedCostUsd).toBe(Number((2 * (metrics.acuRateUsd ?? 0)).toFixed(2)));
   });
 
+  it('keeps spend on the board after a reset deletes the run', async () => {
+    upsertIssue(issue);
+    const created = createRun(issue.number);
+    updateRun(created.id, { status: 'finished', acus: 3.25 });
+
+    await resetIssue(issue.number);
+
+    const metrics = buildMetrics(buildCards());
+    expect(metrics.runsTotal).toBe(0);
+    expect(metrics.acusConsumed).toBe(3.25);
+    expect(metrics.estimatedCostUsd).toBe(Number((3.25 * (metrics.acuRateUsd ?? 0)).toFixed(2)));
+  });
+
   it('returns a reset issue to the backlog even after its pull request merged', async () => {
     upsertIssue({ ...issue, state: 'closed' });
     const created = createRun(issue.number);

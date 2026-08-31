@@ -1,15 +1,55 @@
 import { TERMINAL_RUN_STATUSES, phaseRank } from '../../../shared/board.js';
 import type { Phase, RunDto } from '../../../shared/types.js';
 import { config, devinConfigured } from '../config.js';
-import { getSession, listMessages, pullRequestUrl, type DevinSessionDetail } from '../devin/client.js';
+import { DevinError, getSession, getSessionAcus, listMessages, pullRequestUrl, type DevinSessionDetail } from '../devin/client.js';
 import { inferPhase, mapSessionStatus } from '../devin/phase.js';
 import { nowIso } from '../db/index.js';
 import { publishBoard, publishNotification } from '../events/bus.js';
-import { addRunEvent, getMessageCursor, listActiveRuns, updateRun } from '../store/runs.js';
+import { addRunEvent, getMessageCursor, listActiveRuns, listRuns, updateRun } from '../store/runs.js';
 import { pullRequestNumberFromUrl, trackPullRequest } from './prTracking.js';
 
 function isTerminal(status: RunDto['status']): boolean {
   return TERMINAL_RUN_STATUSES.includes(status);
+}
+
+/** How long a finished run keeps being polled so its final ACU total can land. */
+const ACU_SETTLE_MS = 15 * 60_000;
+
+/** Cleared for the process once the consumption API answers with a permission error. */
+let consumptionAvailable = true;
+
+/**
+ * ACUs only ever grow: a poll that reports less than we already recorded (or nothing at all, which
+ * is what the session payload does until billing catches up) must not erase the run's spend.
+ */
+async function resolveAcus(run: RunDto, reported: number | null): Promise<number> {
+  const best = Math.max(reported ?? 0, run.acus);
+  if (best > 0 || !consumptionAvailable || !run.sessionId) return best;
+
+  try {
+    return Math.max(await getSessionAcus(run.sessionId) ?? 0, best);
+  } catch (error) {
+    if (error instanceof DevinError && [401, 403, 404].includes(error.status)) {
+      consumptionAvailable = false;
+      console.warn('[session-poller] consumption API unavailable; ACUs will come from session polls only');
+    } else {
+      console.error('[session-poller] ACU lookup failed:', error instanceof Error ? error.message : error);
+    }
+    return best;
+  }
+}
+
+/**
+ * Active runs, plus recently finished ones whose ACU total may still be settling.
+ */
+export function runsToPoll(): RunDto[] {
+  const active = listActiveRuns();
+  const seen = new Set(active.map((run) => run.id));
+  const cutoff = Date.now() - ACU_SETTLE_MS;
+  const settling = listRuns().filter(
+    (run) => !seen.has(run.id) && run.finishedAt !== null && Date.parse(run.finishedAt) >= cutoff,
+  );
+  return [...active, ...settling];
 }
 
 /** Phases only move forward; a stray message never drags a card backwards. */
@@ -119,7 +159,7 @@ export async function pollRun(run: RunDto): Promise<void> {
     status,
     phase,
     statusDetail: detail.status_detail ?? detail.status ?? null,
-    acus: detail.acus_consumed ?? run.acus,
+    acus: await resolveAcus(run, detail.acus_consumed),
     sessionUrl: detail.url ?? run.sessionUrl,
     finishedAt: terminal ? (run.finishedAt ?? nowIso()) : null,
   });
@@ -130,7 +170,7 @@ export async function pollRun(run: RunDto): Promise<void> {
 export async function pollActiveRuns(): Promise<void> {
   if (!devinConfigured) return;
 
-  const runs = listActiveRuns().filter((run) => run.sessionId);
+  const runs = runsToPoll().filter((run) => run.sessionId);
   if (runs.length === 0) return;
 
   for (const run of runs) {

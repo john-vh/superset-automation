@@ -10,7 +10,7 @@ import type {
 import { TERMINAL_RUN_STATUSES } from '../../../shared/board.js';
 import { config, devinConfigured, githubConfigured, githubRepo } from '../config.js';
 import { listIssues } from '../store/issues.js';
-import { getMeta, isIssueReset } from '../store/meta.js';
+import { getMeta, getRetiredAcus, isIssueReset } from '../store/meta.js';
 import { listNotifications } from '../store/notifications.js';
 import { getPullRequestForIssue, listPullRequests } from '../store/pullRequests.js';
 import { getLatestRunForIssue, listRuns } from '../store/runs.js';
@@ -79,7 +79,8 @@ export function buildMetrics(cards: CardDto[]): MetricsDto {
 
   const completedRuns = runs.filter((run) => TERMINAL_RUN_STATUSES.includes(run.status));
   const successfulRuns = completedRuns.filter((run) => run.status === 'finished');
-  const acusConsumed = Number(runs.reduce((total, run) => total + run.acus, 0).toFixed(2));
+  const live = runs.reduce((total, run) => total + run.acus, 0);
+  const acusConsumed = Number((live + getRetiredAcus()).toFixed(2));
   const rate = config.ACU_RATE_USD;
 
   return {

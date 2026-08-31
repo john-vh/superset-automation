@@ -5,8 +5,15 @@ import { buildPrompt } from '../devin/prompt.js';
 import { publishBoard, publishNotification } from '../events/bus.js';
 import { getIssue } from '../store/issues.js';
 import { deletePullRequestsForIssue } from '../store/pullRequests.js';
-import { clearIssueReset, markIssueReset } from '../store/meta.js';
-import { addRunEvent, createRun, deleteRunsForIssue, getLatestRunForIssue, updateRun } from '../store/runs.js';
+import { clearIssueReset, markIssueReset, retireAcus } from '../store/meta.js';
+import {
+  addRunEvent,
+  createRun,
+  deleteRunsForIssue,
+  getLatestRunForIssue,
+  sumRunAcusForIssue,
+  updateRun,
+} from '../store/runs.js';
 import { nowIso } from '../db/index.js';
 import { isRunActive } from '../../../shared/board.js';
 
@@ -72,6 +79,7 @@ export async function resetIssue(issueNumber: number): Promise<void> {
   }
 
   deletePullRequestsForIssue(issueNumber);
+  retireAcus(sumRunAcusForIssue(issueNumber));
   deleteRunsForIssue(issueNumber);
   markIssueReset(issueNumber, nowIso());
 

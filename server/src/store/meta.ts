@@ -32,6 +32,22 @@ export function isIssueReset(issueNumber: number): boolean {
   return getMeta(`${RESET_KEY_PREFIX}${issueNumber}`) !== null;
 }
 
+const RETIRED_ACUS_KEY = 'retired_acus';
+
+/**
+ * Resetting an issue deletes its runs, but the ACUs those runs burned were still spent, so they
+ * are carried here and keep counting towards the board's spend total.
+ */
+export function retireAcus(amount: number): void {
+  if (amount <= 0) return;
+  setMeta(RETIRED_ACUS_KEY, String(getRetiredAcus() + amount));
+}
+
+export function getRetiredAcus(): number {
+  const stored = Number(getMeta(RETIRED_ACUS_KEY));
+  return Number.isFinite(stored) ? stored : 0;
+}
+
 /** Returns false when the delivery was already processed. */
 export function recordDelivery(deliveryId: string, receivedAt: string): boolean {
   const result = db()
