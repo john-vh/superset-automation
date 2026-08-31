@@ -11,7 +11,7 @@ demo or simulation mode, so the setup below is all required.
 ## What you need
 
 - Docker (with Compose v2) and a terminal.
-- **Your own copy of Superset** on GitHub, with issues in it (see step 1).
+- **Your own fork of [`john-vh/superset`](https://github.com/john-vh/superset)**, with issues in it (see step 1).
 - A **GitHub token** for that copy, and admin rights on it to add a webhook.
 - A **Devin account**: API key + organization id.
 - A **tunnel** (e.g. `cloudflared`), because GitHub webhooks and Devin callbacks have to reach your
@@ -21,8 +21,8 @@ demo or simulation mode, so the setup below is all required.
 
 ### 1. Get a repository with issues in it
 
-Fork or copy Superset (or the copy you were pointed at) into your own account. **Forks do not copy
-issues**, so the fork starts empty — open a few issues in your copy by hand before continuing;
+Fork [`john-vh/superset`](https://github.com/john-vh/superset) (a copy of Apache Superset) into your
+own account. **Forks do not copy issues**, so your fork starts empty — open a few issues in your copy by hand before continuing;
 dependency advisories work well ("Bump Flask to fix CVE-…", "DoS in `brace-expansion`"). Whatever
 you open here is what shows up in the board's Backlog column.
 
@@ -45,7 +45,7 @@ cp .env.example .env
 The values that matter:
 
 ```env
-GITHUB_REPO=<your-account>/<your-superset-copy>
+GITHUB_REPO=<your-account>/superset
 GITHUB_TOKEN=<fine-grained PAT on that repo — read Issues, Pull requests, Contents, Checks, Metadata>
 GITHUB_WEBHOOK_SECRET=<any random string; you reuse it in step 5>
 DEVIN_API_KEY=<from app.devin.ai settings>
@@ -78,7 +78,7 @@ Already running your own `cloudflared` on the host? Skip `--profile tunnel`, run
 
 ### 5. Point a webhook at the tunnel
 
-In your Superset copy → Settings → Webhooks → Add webhook:
+In your Superset fork → Settings → Webhooks → Add webhook:
 
 - **Payload URL**: `https://<tunnel-host>/api/webhooks/github`
 - **Content type**: `application/json`
