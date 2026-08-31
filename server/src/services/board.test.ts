@@ -6,7 +6,7 @@ import { upsertCheck, upsertPullRequest } from '../store/pullRequests.js';
 import { markIssueReset } from '../store/meta.js';
 import { createRun, updateRun } from '../store/runs.js';
 import { resetIssue } from './dispatch.js';
-import { buildCards, buildMetrics, resolvePhase } from './board.js';
+import { buildCards, buildMetrics, reportedPhase, resolvePhase } from './board.js';
 
 const issue: IssueDto = {
   number: 1,
@@ -158,6 +158,13 @@ describe('board aggregation', () => {
     updateRun(created.id, { status: 'running', phase: 'implementing' });
 
     expect(buildCards()[0]?.phase).toBe('implementing');
+  });
+
+  it('holds a reported review at validating until a pull request is tracked', () => {
+    expect(reportedPhase('review', null)).toBe('validating');
+    expect(reportedPhase('review', pr)).toBe('review');
+    expect(reportedPhase('implementing', null)).toBe('implementing');
+    expect(reportedPhase('attention', null)).toBe('attention');
   });
 
   it('leaves updated_at alone when a poll reports no change', async () => {

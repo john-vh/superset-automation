@@ -26,8 +26,13 @@ describe('mapSessionStatus', () => {
 
 describe('inferPhase', () => {
   it('derives a phase from session chatter and returns null when unclear', () => {
-    expect(inferPhase('Opened a pull request with the fix')).toBe('review');
     expect(inferPhase('Running the test suite now')).toBe('validating');
+    expect(inferPhase('Committing the fix')).toBe('implementing');
     expect(inferPhase('hello there')).toBeNull();
+  });
+
+  it('never infers review, since talking about a pull request is not opening one', () => {
+    expect(inferPhase('Next I will open a pull request with the fix')).toBeNull();
+    expect(inferPhase('See https://github.com/acme/repo/pull/12 for context')).toBeNull();
   });
 });

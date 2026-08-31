@@ -22,6 +22,14 @@ export function hasFailingCheck(pr: PullRequestDto | null): boolean {
 }
 
 /**
+ * A session reporting `review` (or the playbook's `done`) before its pull request exists is still
+ * working, so the reported phase is held at `validating` until a pull request is tracked.
+ */
+export function reportedPhase(phase: Phase, pr: PullRequestDto | null): Phase {
+  return phase === 'review' && !pr ? 'validating' : phase;
+}
+
+/**
  * `merged` means the pull request was actually merged — nothing else earns it. An open pull
  * request always resolves to `review` (the user owns the next action) no matter what the session
  * reported or whether the session has since ended.

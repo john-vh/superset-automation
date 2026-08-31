@@ -46,14 +46,17 @@ export function mapSessionStatus(status: string | null, detail: string | null = 
   return mapped;
 }
 
+/**
+ * Chatter can only place a card on Devin's side of the board. Saying "I'll open a pull request"
+ * is not a pull request, so `review` is left to the tracked PR itself.
+ */
 const PHASE_HINTS: Array<{ phase: Phase; patterns: RegExp[] }> = [
-  { phase: 'review', patterns: [/opened? (?:a )?pull request/i, /\/pull\/\d+/i, /pr is (?:up|open)/i] },
   { phase: 'validating', patterns: [/running (?:the )?tests?/i, /\btypecheck\b/i, /\blint(ing)?\b/i, /\bci\b/i] },
   { phase: 'implementing', patterns: [/implement/i, /writing the fix/i, /editing/i, /patch/i, /commit/i] },
   { phase: 'investigating', patterns: [/investigat/i, /reading/i, /explor/i, /reproduc/i, /planning/i] },
 ];
 
-/** Best-effort phase guess from session chatter, used when no callback has arrived. */
+/** Best-effort phase guess from session chatter, used when no callback has arrived. Never `review`. */
 export function inferPhase(text: string): Phase | null {
   for (const hint of PHASE_HINTS) {
     if (hint.patterns.some((pattern) => pattern.test(text))) return hint.phase;

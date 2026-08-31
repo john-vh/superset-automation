@@ -59,7 +59,8 @@ curl -sS -X POST "$CALLBACK_URL" \
 ```
 
 Valid phases, in order: `investigating`, `implementing`, `validating`, `review`, `done`, plus
-`attention` for a blocked or failed run. `pr_number` is optional and only meaningful with `review`.
+`attention` for a blocked or failed run. `pr_number` belongs with `review`: the board holds a card
+at `validating` until a pull request is actually tracked, so reporting `review` early moves nothing.
 A failed callback is not fatal — log it and continue; the board also polls session state.
 
 ## Specifications
