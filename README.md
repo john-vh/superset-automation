@@ -1,4 +1,4 @@
-# superset-automation
+# Issue Automation Pipeline
 
 Kanban automation board that ingests issues from [`john-vh/superset`](https://github.com/john-vh/superset),
 dispatches them to Devin, and tracks each session through to a pull request and its GitHub Actions checks.

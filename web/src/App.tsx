@@ -103,7 +103,7 @@ export function App() {
     <div className="flex h-screen flex-col overflow-hidden px-5 py-4">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-base font-semibold text-text">Superset Automation</h1>
+          <h1 className="text-base font-semibold text-text">Issue Automation Pipeline</h1>
           <p className="text-xs text-muted">
             {board?.repo ?? 'loading…'}
             {integrations?.lastIssueSyncAt ? ` · synced ${formatRelative(integrations.lastIssueSyncAt)}` : ''}
